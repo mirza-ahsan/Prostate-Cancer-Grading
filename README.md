@@ -12,8 +12,8 @@ A deep learning research project for automated Gleason grading of prostate cance
 | Phase | Status | Result |
 |---|---|---|
 | **1 — Tile Extraction** | ✅ Complete | 382,117 tiles · 49 GB · 0 failures |
-| **2 — Data Analysis & Audit** | 🔜 Next | — |
-| **3A — EfficientNet Baseline** | ⏳ Pending | Target: QWK > 0.88 |
+| **2 — Data Analysis & Audit** | ✅ Complete | 260 noise candidates flagged · Augmentation set |
+| **3A — EfficientNet Baseline** | 🔜 Next | Target: QWK > 0.88 |
 | **3B — DINOv2 + ABMIL** | ⏳ Pending | Target: QWK > 0.92 |
 | **3C — TransMIL Upgrade** | ⏳ Pending | If 3B plateaus |
 | **4 — Evaluation** | ⏳ Pending | — |
@@ -293,9 +293,9 @@ UNI and CONCH are consistently top-ranked in prostate-specific benchmarks but re
 
 ---
 
-## Phase 2 — Data Analysis and Quality Audit
+## Phase 2 — Data Analysis and Quality Audit (Complete)
 
-**Notebook:** `notebooks/02_data_analysis.ipynb`
+**Notebook:** [`notebooks/02_data_analysis.ipynb`](notebooks/02_data_analysis.ipynb)
 
 Before any model is built, the data must be understood. Phase 2 involves four audits:
 
@@ -398,7 +398,7 @@ If ABMIL plateaus below the primary target, the aggregation head is replaced wit
 | Milestone | Criterion |
 |---|---|
 | **Phase 1** ✅ | `manifest.csv` covers all non-corrupted slides; 0 unaccounted; 0 failed |
-| **Phase 2** | Label noise candidates identified; provider colour gap quantified; augmentation decided |
+| **Phase 2** ✅ | 260 label noise candidates flagged; provider colour gap quantified; jitter augmentation decided |
 | **Phase 3A** | EfficientNet baseline QWK **> 0.88** |
 | **Phase 3B** | DINOv2 + ABMIL QWK **> 0.92** |
 | **Primary target** | Any model QWK **≥ 0.94** on local validation |
