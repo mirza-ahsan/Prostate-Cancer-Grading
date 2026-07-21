@@ -9,8 +9,8 @@ Full documentation, setup instructions, SOTA research, and architectural details
 | Phase | Status | Key Output |
 |---|---|---|
 | **1 — Tile Extraction** | ✅ Complete | 382,117 tiles, 49 GB, `data/manifest.csv` |
-| **2 — Data Analysis** | 🔜 Next | Audit manifest, inspect tiles, confirm augmentation strategy |
-| **3A — EfficientNet Baseline** | ⏳ Pending | Target QWK > 0.88 |
+| **2 — Data Analysis** | ✅ Complete | Data audited, 260 label noise candidates flagged, jitter confirmed |
+| **3A — EfficientNet Baseline** | 🔜 Next | Target QWK > 0.88 |
 | **3B — DINOv2 + ABMIL** | ⏳ Pending | Target QWK > 0.92 |
 | **3C — TransMIL Upgrade** | ⏳ Pending | If 3B plateaus below 0.92 |
 | **4 — Evaluation** | ⏳ Pending | Provider-stratified QWK, attention heatmaps |
@@ -19,11 +19,11 @@ Full documentation, setup instructions, SOTA research, and architectural details
 
 ## Immediate Next Steps
 
-1. Open `notebooks/02_data_analysis.ipynb` (create it).
-2. Load `data/manifest.csv`.
-3. Audit class balance, provider colour gap, and Grade 0 label noise candidates.
-4. Display sample tile grids per ISUP grade and provider.
-5. Decide augmentation strategy before writing any training code.
+1. Open `notebooks/03_train_efficientnet.ipynb` (create it).
+2. Implement a PyTorch `Dataset` that reads `data/manifest.csv` and loads the tiles.
+3. Apply aggressive colour jitter augmentation, following Phase 2 decisions.
+4. Build the baseline EfficientNetV2-S model with an ordinal sigmoid regression head.
+5. Train the model and evaluate against the QWK > 0.88 baseline target.
 
 ---
 
