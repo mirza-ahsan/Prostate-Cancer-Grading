@@ -167,5 +167,65 @@ cython_debug/
 # macOS
 .DS_Store
 
-# Data Directory (User requested)
+# Data & Datasets
 data/
+datasets/
+raw_data/
+processed_data/
+
+# Ruff
+.ruff_cache/
+
+# Model checkpoints & weights
+checkpoints/
+models/
+weights/
+saved_models/
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.keras
+*.onnx
+*.safetensors
+*.bin
+*.joblib
+*.pkl
+
+# Experiment tracking & logs
+wandb/
+runs/
+lightning_logs/
+mlruns/
+logs/
+
+# Evaluation outputs & figures
+outputs/
+results/
+predictions/
+heatmaps/
+plots/
+figures/
+
+# Whole slide images & heavy binary data
+*.svs
+*.tiff
+*.tif
+*.ndpi
+*.npy
+*.npz
+*.hdf5
+*.parquet
+*.feather
+
+# Environment files
+.env.*
+!.env.example
+
+# OS system files
+Thumbs.db
+ehthumbs.db
+*.swp
+*.swo
+*~
+
