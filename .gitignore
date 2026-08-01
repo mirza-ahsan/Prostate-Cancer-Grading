@@ -173,8 +173,13 @@ datasets/
 raw_data/
 processed_data/
 
-# Ruff
+# Ruff linter & config
 .ruff_cache/
+.ruff.toml
+ruff.toml
+
+# Editor configuration
+.editorconfig
 
 # Model checkpoints & weights
 checkpoints/
