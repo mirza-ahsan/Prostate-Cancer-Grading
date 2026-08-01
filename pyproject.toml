@@ -1,25 +1,47 @@
 [project]
 name = "prostate-cancer-grading"
 version = "0.1.0"
-description = "Add your description here"
+description = "Prostate Cancer Grading Deep Learning & ML project"
 requires-python = ">=3.12"
 dependencies = [
     "imagecodecs>=2026.6.26",
     "matplotlib>=3.11.0",
     "opencv-python-headless>=5.0.0.93",
+    "pandas>=3.0.5",
     "scikit-learn>=1.9.0",
     "seaborn>=0.13.2",
+    "tensorflow[and-cuda]>=2.16.0",
     "tifffile>=2026.7.14",
-    "torch>=2.13.0",
-    "torchaudio>=2.11.0",
-    "torchvision>=0.28.0",
+    "torch",
+    "torchaudio",
+    "torchvision",
     "tqdm>=4.66.5",
 ]
-
-[[tool.uv.index]]
-url = "https://download.pytorch.org/whl/cu130"
 
 [dependency-groups]
 dev = [
     "ipykernel>=7.3.0",
 ]
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchvision = { index = "pytorch" }
+torchaudio = { index = "pytorch" }
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+ignore = ["B018"]
+
+[tool.black]
+line-length = 120
+
