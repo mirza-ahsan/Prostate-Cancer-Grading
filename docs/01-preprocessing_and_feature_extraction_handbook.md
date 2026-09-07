@@ -760,88 +760,124 @@ problem in the previous attempt came from skipping one.
 
 ## Stage 1 — Take inventory
 
-> **The question:** what do we actually have, and what is already broken?
+> **The question:** what do we actually have, and does any of it surprise us?
 
 ### Where you are
 
-You have 10,616 rows in `train.csv` and a previous feature set covering 10,569
-slides. Forty-seven are unaccounted for. You also don't know how many tiles any
-slide actually received, whether every image opens, or whether the two
-providers are at the same physical resolution.
+You have 10,616 rows in `train.csv` and 10,616 image files on disk. You do not
+yet know whether every one of them opens, how each file is built inside, how
+big they are, or whether the two hospitals scanned at the same magnification.
+You also do not know whether the grades in the CSV agree with the Gleason
+scores written next to them.
 
-Every one of those is a fact you will need later, and all of them are cheap to
-establish now. Starting anywhere else means building on assumptions.
+All of that is cheap to find out now, and every later stage leans on at least
+one of it. Starting anywhere else means building on guesses.
+
+We are building the feature set from scratch. There is no earlier feature set
+to inspect or compare against, so everything from here is measured from the
+images themselves.
 
 ### The work
 
-1. Load `train.csv`. Confirm the row count and the columns available.
-2. Build one table with a row per slide. For each slide record: its grade, its
-   Gleason score, its provider, whether the `.tiff` exists, whether a label
-   mask exists, whether the old feature file exists, and how many tiles that
-   old file contains.
-3. Open every slide once with OpenSlide and record: the number of pyramid
-   levels, the level-0 dimensions, and whatever resolution metadata the file
-   carries. Catch and record errors rather than letting them stop the loop.
-4. Load one old feature file and check its type, shape and dtype. Confirm
-   whether it is a bare tensor or a dictionary, and whether it is fp16 or fp32.
-5. Work out which slides are missing and whether the missing set is
-   concentrated in one provider or one grade.
-6. Look at the distribution of tile counts — not just the mean, the low end.
-7. Compare physical resolution between the two providers.
-8. Check whether ISUP grade and Gleason score agree with each other on every
-   row, using the standard mapping between the two systems.
+1. Load `train.csv`. Confirm the row count and the columns.
 
-This loop opens 10,616 files. Budget 20–40 minutes and let it run.
+2. Build one table with a row per slide holding: the slide id, its grade, its
+   Gleason score, its hospital, whether the image file exists, and whether a
+   label mask exists. Recording that a mask exists is fine — an inventory is
+   not tiling. Nothing that places tiles is ever allowed to read this column.
+
+3. Open every image once and add to the same row: how many resolution levels
+   the file contains, the width and height of the largest level, the shrink
+   factor of each level, and the physical resolution the file reports (microns
+   per pixel, plus the raw resolution tags it came from). If a file will not
+   open, write the error into that row and carry on.
+
+4. Add one rough number per slide: read the smallest, most shrunken version of
+   the image and record what fraction of it is not near-white. This is **not** a
+   tissue detector and it will never be used to place a tile. It is a cheap
+   ranking, so that Stage 2 knows which slides are worth looking at first and
+   so you can see the thin end of the dataset.
+
+5. Save the table to disk. Every later stage loads this file instead of
+   reopening ten thousand images.
+
+6. Read the table back and check the basics: did every slide open, do all the
+   files have the same number of levels and the same shrink factors, and how do
+   the largest-level sizes compare between the two hospitals.
+
+7. Compare the reported physical resolution between the two hospitals. Look at
+   the spread of both, not just an average.
+
+8. Check whether the ISUP grade and the Gleason score agree on every row, using
+   the standard mapping between them. Keep the rows that disagree.
+
+Opening 10,616 files takes roughly 20–40 minutes. Step 4 reads real pixels and
+is considerably slower — time it on twenty slides and multiply before you start
+the full run.
 
 ### The judgment calls
 
-**Interpreting the missing 47.** If they're spread evenly across providers and
-grades, it's almost certainly a session timeout — harmless, just re-extract
-them later. If they cluster in one provider or one grade, something systematic
-broke, and you need to know what before you trust anything else in that feature
-set. The distribution is the diagnosis.
+**Decide the saved format before the long run, not after.** Some of what the
+slide reader hands back is not a plain number. The property list behaves like a
+dictionary but stays tied to the open file, and the shrink factors arrive as a
+group rather than one value. Pick the handful of values you actually want as
+ordinary columns and pull them out as you go. If you drop the live objects into
+the table and only think about saving at the end, you will find the table
+cannot be written out, and you will run the whole loop a second time.
 
-**How thin is too thin.** Some slides will have far fewer than 64 tiles. A
-slide with eight tiles gives an attention model almost nothing to pool over. If
-a large fraction of slides sits far below the cap, that alone explains part of
-the previous error rate, and it changes how aggressively you set your tissue
-threshold later.
+**The resolution question.** It is widely repeated that Radboud slides are
+around 0.24 microns per pixel and Karolinska around 0.48 — a factor of two
+apart. If that were true here it would matter: a tile of a fixed pixel size
+would cover twice as much real tissue on one hospital's slides as the other's,
+and the encoder would effectively be looking at two different zoom levels. But
+two slides from this copy of the data, one from each hospital, both came back
+near 0.45–0.49. That is a sample of two and may not hold. The point is that the
+number is written in these files, so measure it across all 10,616 instead of
+repeating the claim. If both hospitals really are at the same scale in our
+copy, that removes one suspected cause of the cross-hospital gap, and it is
+worth knowing early. Record what you find and move on; nothing acts on it until
+much later.
 
-**The resolution question.** It is widely reported that Radboud slides are
-around 0.24 microns per pixel and Karolinska around 0.45 — roughly a factor of
-two. If that holds in your copy, a 224-pixel tile covers twice as much real
-tissue on one provider as the other, and the encoder is effectively seeing two
-different zoom levels. This is a genuine contributor to the domain-shift
-problem from Part 1.5.
+**How thin is too thin.** The bottom of the "not near-white" distribution from
+step 4 is the set of slides that will give a tiling routine almost nothing to
+work with. If a large share of slides sit far down that distribution, that
+limits how aggressive the tissue threshold in Stage 5 can be. Look at the
+minimum and the lowest tenth, never the average.
 
-These TIFFs may carry no resolution metadata at all, in which case use a proxy:
-compare median level-0 slide area between providers, and revisit once you have
-a tissue detector in Stage 5 by comparing median tissue-region size. Do not act
-on the finding yet — record it and move on. It becomes important much later.
-
-**Gleason/ISUP disagreements.** ISUP is derivable from the Gleason score, so
-any row where they contradict each other is a labelling error you get for free.
-Note that Karolinska writes "negative" where Radboud writes "0+0" for the same
-thing, which is itself a nice illustration that the two sites' label pipelines
-were entirely separate. Whatever this check turns up is your first concrete
-evidence of label noise.
+**Gleason and ISUP disagreements.** The ISUP grade can be worked out from the
+Gleason score, so any row where the two contradict each other is a labelling
+mistake you get for free. Note also that Karolinska writes "negative" where
+Radboud writes "0+0" for the same thing, which is a small sign that the two
+hospitals' labelling pipelines never met. Whatever this turns up is the first
+hard evidence of label noise in the dataset. Do not correct the rows. Count
+them, keep the list, and mention it whenever a score looks suspiciously stuck.
 
 ### Leave behind
 
 A slide inventory table saved to disk, and answers in the findings log to:
-*why are the 47 missing*, *what is the tile-count distribution*, and *are the
-providers at different resolutions*.
+*does every slide open, and are the files built the same way inside?*, *are the
+two hospitals at the same physical resolution?*, *how much of a typical slide
+is blank, and what does the thin end look like?*, and *how many rows have a
+grade that disagrees with their Gleason score?*
 
 ### Traps
 
-- Not closing OpenSlide handles inside the loop. You will exhaust file
-  descriptors somewhere around slide 1,000 and the failure message will not
-  point at the cause. Close in a `finally` block.
-- Letting one corrupt file kill a 40-minute loop. Catch per-slide.
-- Reading the mean tile count and stopping. The minimum and the bottom decile
-  are what matter.
-- Treating a missing resolution field as "the providers are the same." It means
-  you don't know yet.
+- Not closing each image after you read it. Handles left open will exhaust the
+  operating system's limit part-way through a long loop, and the failure
+  message will not point at the cause. Close it in a way that still runs when
+  the body of the loop fails.
+- Keeping the property list in the table. It holds the file open even though
+  you thought you were finished with the slide, which is the quiet version of
+  the trap above.
+- Letting one unreadable file end a forty-minute loop. Catch it per slide,
+  write the error into the row, keep going.
+- Building each row as a bare list and adding fewer values on the error path
+  than on the success path. The row stops matching the columns and the loop
+  stops with it. Use names, not positions.
+- Reading the average of anything and stopping there. The minimum and the
+  bottom tenth are where the problems live.
+- Treating a missing resolution field as "the two hospitals are the same". It
+  means you do not know yet.
 
 ---
 
@@ -866,8 +902,9 @@ stage most worth not skipping.
 2. Look at 20 random Radboud slides and 20 random Karolinska slides, side by
    side. The colour difference should be obvious.
 3. Look at 10 slides from each ISUP grade, 0 through 5.
-4. Look at the 20 slides that got the fewest tiles in the old feature set.
-   These are your failure cases — find out why.
+4. Look at the 20 slides with the least ink on them, taken from the Stage 1
+   table. These are your likely failure cases — find out what is wrong with
+   each one.
 5. Look at the largest and smallest slides by area.
 6. Write down a list titled "visual problems in this dataset", with a rough
    count for each.
@@ -886,10 +923,10 @@ them. That means pen removal is about making *training* resemble *test*, not
 about surviving test — useful framing when you decide in Stage 5 whether to
 build a filter at all. If you find almost no pen, skip it entirely.
 
-**Why the thin slides matter most.** A slide that yielded eight tiles either
-has very little tissue, is faintly stained, or broke something. Each of those
-implies a different fix. Diagnose them by eye now, because in Stage 5 they are
-the cases your detector has to handle.
+**Why the thin slides matter most.** A slide that came out nearly blank either
+has very little tissue on it, is faintly stained, or is broken in some way.
+Each of those implies a different fix. Work out which it is by eye now, because
+in Stage 5 these are the cases your tissue detection has to survive.
 
 ### Leave behind
 
@@ -1028,11 +1065,12 @@ you a prediction for all 10,600 slides, and a score computed on that pool is
 your honest number. A single holdout gives you one small sample and an
 irresistible temptation to tune against it.
 
-**Building this before you have new features is deliberate.** The fold
-assignment depends only on labels and duplicate groups, not on features. Making
-it now means the modelling work can start on the *old* features immediately,
-with a trustworthy evaluation, while the new feature pipeline is still being
-built.
+**Building this before any features exist is deliberate.** The fold assignment
+depends only on the labels and the duplicate groups, not on features at all. So
+it can be settled now, and once it is settled every number recorded from here
+on is comparable with every other one. Do it later and you will be tempted to
+change it after you have seen a result, which is exactly how a split stops
+being honest.
 
 ### Leave behind
 
@@ -1382,8 +1420,10 @@ There are two separate checks here and they catch different bugs.
 1. Choose about 2,000 slides, stratified by grade and provider.
 2. Extract features for those, in the format you intend to use for the full
    run.
-3. Train a simple model on the pilot features. Train the same model on the
-   *old* mask-based features restricted to the same 2,000 slides. Compare.
+3. Train a simple model on the pilot features, using the folds from Stage 4,
+   and record the score. Then extract a second pilot set over the same slides
+   with the tiles placed on a plain evenly spaced grid, ignoring tissue
+   entirely, train the same model on that, and compare the two scores.
 4. Separately: pick five slides that already have extracted features. For each,
    run tiling and encoding fresh from the `.tiff`, and compare the result
    against what is stored — both the feature values and the coordinates.
@@ -1391,13 +1431,14 @@ There are two separate checks here and they catch different bugs.
 
 ### The judgment calls
 
-**What you want from the pilot comparison, and it isn't a win.** The old tiling
-used expert annotations; the new one uses pixels. You are not expecting the new
-one to score higher. You are checking that it doesn't collapse. If the new
-tiling comes within about 0.02 of the old on the same slides, it is fine — and
-it has the enormous advantage of actually being runnable at test time.
+**What the pilot comparison is for.** The evenly spaced grid is a deliberately
+poor way to choose tiles — it spends most of them on blank glass. It exists as
+a floor. If choosing tiles by tissue does not beat that floor clearly, then the
+tissue step is not doing its job and you need to find out why before spending a
+day of GPU time. You are not chasing a particular number here; you are checking
+that the pipeline runs end to end and that each part of it earns its place.
 
-If it collapses, debug now, while it costs a day rather than a week.
+If it does collapse, debug it now, while it costs a day rather than a week.
 
 **The reproduction check is the more important of the two.** It proves that the
 features your submission notebook will compute live are the same features the
@@ -1413,13 +1454,14 @@ casually.
 
 ### Leave behind
 
-A pilot feature set, a comparison number between old and new tiling, and a
-saved reproduction test that passes.
+A pilot feature set, the two scores from the comparison, and a saved
+reproduction test that passes.
 
 ### Traps
 
 - Skipping the pilot because the code "looks right".
-- Treating a small drop versus the mask-based features as failure.
+- Reading the pilot score as if it were the final score. It comes from a
+  fifth of the data.
 - Running the reproduction check only once, at the start.
 - Comparing against features extracted with different settings and concluding
   the code is broken.
@@ -1486,8 +1528,8 @@ list of the ones that could not be produced and why.
 
 You have ten thousand small files. That is slow to read — every file open is a
 separate request to the operating system, and a training loop does 10,600 of
-them per epoch. And an unverified feature set is exactly how the previous
-attempt ended up with 47 silently missing slides.
+them per epoch. And a feature set nobody checked is how slides go missing
+without anyone noticing for months.
 
 ### The work
 
@@ -1814,7 +1856,7 @@ transitively.
 | 12 | Get a real number | two to three days |
 | 13 | Everything after | the rest of the project |
 
-Stage 4 is worth reaching quickly. Once the fold assignment exists, model work
-can begin on the old features with a trustworthy evaluation, in parallel with
-the rest of this list. Until it exists, no number anyone produces means
-anything.
+Stage 4 is worth reaching quickly. Once the fold assignment exists and is fixed
+in place, every number produced afterwards is comparable with every other one,
+and modelling work can run alongside the rest of this list. Until it exists, no
+number anyone produces means anything.
