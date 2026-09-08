@@ -178,16 +178,19 @@ data/test.csv
 data/train.csv
 data/train_images/
 data/train_label_masks/
-data/features_v*/
-data/slide_inventory.csv
 datasets/
 raw_data/
 processed_data/
 
+# Feature sets. The arrays and per-slide files are heavy; the manifest is not.
+# Ignore the contents of each version directory but keep its manifest. The
+# version directory itself must stay unignored, or git will not descend into
+# it to find the manifest.
+data/features/*/*
+!data/features/*/manifest.json
+
 # Track specific shared data/results
 !data/folds.csv
-!data/duplicates.csv
-!data/features_v*/manifest.json
 !results/results.csv
 
 # Ruff linter & config
@@ -238,6 +241,10 @@ figures/
 *.hdf5
 *.parquet
 *.feather
+
+# Derived tables we do want tracked. These negations must stay AFTER the
+# *.parquet rule above — with two matching rules, the last one wins.
+!data/derived/*.parquet
 
 # Environment files
 .env.*
