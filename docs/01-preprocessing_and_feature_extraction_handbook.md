@@ -846,9 +846,10 @@ minimum and the lowest tenth, never the average.
 
 **Gleason and ISUP disagreements.** The ISUP grade can be worked out from the
 Gleason score, so any row where the two contradict each other is a labelling
-mistake you get for free. Note also that Karolinska writes "negative" where
-Radboud writes "0+0" for the same thing, which is a small sign that the two
-hospitals' labelling pipelines never met. Whatever this turns up is the first
+mistake you get for free. Note also that the two hospitals write "no cancer"
+differently — Radboud writes "negative" and Karolinska writes "0+0" — which is
+a small sign that their labelling pipelines never met. Normalise one to the
+other before comparing, or every clean slide will look like a disagreement. Whatever this turns up is the first
 hard evidence of label noise in the dataset. Do not correct the rows. Count
 them, keep the list, and mention it whenever a score looks suspiciously stuck.
 
@@ -1682,6 +1683,64 @@ uncorrelated errors, blended, is the realistic route to the target.
 ---
 
 # Part 7 — File format reference
+
+### Naming
+
+Names are decided once, here, so that nobody has to guess where something lives
+or invent a second name for it later.
+
+**Notebooks** are named for the stage that produced them: a two-digit stage
+number, an underscore, and a short description. The number is the stage number
+and never changes, even if the notebooks end up out of order on disk:
+
+| Stage | Notebook |
+|---|---|
+| 1 | `notebooks/01_inventory.ipynb` |
+| 2 | `notebooks/02_visual_survey.ipynb` |
+| 3 | `notebooks/03_duplicates.ipynb` |
+| 4 | `notebooks/04_folds.ipynb` |
+| 5 | `notebooks/05_tissue_detection.ipynb` |
+| 6 | `notebooks/06_tile_placement.ipynb` |
+| 7 | `notebooks/07_encoder.ipynb` |
+| 8 | no notebook — this is the stage where code moves into `src/` |
+| 9 | `notebooks/09_pilot.ipynb` |
+| 10 | no notebook — extraction runs unattended, from a script |
+| 11 | `notebooks/11_pack_and_verify.ipynb` |
+| 12 | `notebooks/12_baseline.ipynb` |
+
+If one stage genuinely needs two notebooks, add a letter — `05a`, `05b` — and
+do not renumber anything. A notebook whose name no longer matches what is
+inside it gets renamed the moment you notice.
+
+**Modules**, once Stage 8 creates them, live in `src/` and are named for what
+they do rather than when they were written: `paths.py` for the data root and
+directory locations, `tiling.py` for the tiling function, `encode.py` for
+loading the encoder and encoding tiles.
+
+**Scripts** that run unattended for hours — extraction is the only one — live
+in `scripts/` and import from `src/`. They are not notebooks, because a
+notebook cannot be resumed after a kernel dies.
+
+**Derived data** goes in `data/derived/`, one file per thing:
+`slide_inventory.parquet` from Stage 1, `duplicate_groups.parquet` from
+Stage 3. Parquet rather than CSV, because a CSV turns every number back into a
+string on the way in and quietly changes types under you.
+
+The fold assignment is the exception. It lives at `data/folds.csv`, it is small,
+and it is committed to git — it is the one file whose exact contents must
+survive unchanged for the life of the project, so it belongs in version
+control where a change to it is visible.
+
+**Feature sets** live in `data/features/`, one directory per version, named by
+the version string. Inside each: the four files described below, plus a
+`slides/` subdirectory holding the per-slide intermediate files while
+extraction is still running.
+
+**The version string** describes what produced the feature set, so that two of
+them can never be confused: encoder, pyramid level, tile size, tile cap, tissue
+method, and a version number — for example `uni2h-L1-224-t144-hsv-v1`. It
+changes whenever any of those change. Every recorded result names the version
+string it came from.
 
 ### Fold assignments
 
