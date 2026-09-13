@@ -231,6 +231,9 @@ heatmaps/
 plots/
 figures/
 
+# Agent md files
+CLAUDE.md
+
 # Whole slide images & heavy binary data
 *.svs
 *.tiff
