@@ -1034,8 +1034,9 @@ against it, which means it can only be created once.
 
 ### The work
 
-1. Merge the duplicate groups from Stage 3 onto the training table. Give any
-   slide without a group its own.
+1. Merge `data/derived/duplicate_groups.parquet` onto the training table.
+   Every slide already carries a group, singletons included, so this is a join
+   and nothing more.
 2. Build a combined stratification key from grade and provider together, so
    that folds balance on both at once.
 3. Split into five folds using a splitter that is simultaneously *grouped* by
@@ -1044,7 +1045,10 @@ against it, which means it can only be created once.
    stop — do not proceed with the file.
 5. Print grade distribution by fold and provider distribution by fold as
    proportions. Read both tables.
-6. Save the file, commit it, and write in the README that it is never
+6. Check that the pen-marked slides are spread across folds rather than piled
+   into one. They are 317 slides, all Radboud, and Stage 12 needs to report a
+   score on them separately.
+7. Save the file, commit it, and write in the README that it is never
    regenerated.
 
 ### The judgment calls
@@ -1065,6 +1069,13 @@ predicted exactly once by a model that never trained on it. Pooling those gives
 you a prediction for all 10,600 slides, and a score computed on that pool is
 your honest number. A single holdout gives you one small sample and an
 irresistible temptation to tune against it.
+
+**Grouping fights stratification harder on Radboud.** Duplicates are not spread
+evenly: Stage 3 found 505 of the 555 grouped slides are Radboud, 9.8% of that
+hospital against 0.9% of Karolinska. Since grouped slides cannot be separated,
+the splitter has less freedom on Radboud than on Karolinska, and the provider
+balance is the table most likely to come out uneven. Read it before accepting
+the split.
 
 **Building this before any features exist is deliberate.** The fold assignment
 depends only on the labels and the duplicate groups, not on features at all. So
@@ -1106,7 +1117,9 @@ genuinely fight you.
 
 ### The work
 
-1. Read a slide's smallest pyramid level as an RGB array.
+1. Read a slide's smallest pyramid level as an RGB array. For anything that
+   needs many slides at once, read the thumbnail cache Stage 2 built rather
+   than reopening the files — it is the same pictures, already on disk.
 2. Convert to HSV and build a boolean mask from a saturation threshold, using
    the fact that empty glass is nearly white and therefore nearly unsaturated,
    while stained tissue is not.
@@ -1117,7 +1130,9 @@ genuinely fight you.
 5. Tune by looking, on ten slides from each provider separately.
 6. Try an automatic per-slide threshold as an alternative to a fixed one, and
    compare.
-7. Decide whether pen removal is needed, based on Stage 2's count.
+7. Make sure pen ink does not count as tissue when tiles are ranked. This is
+   not the same as removing pen, and it is not the same as skipping tiles —
+   see the judgment call below.
 8. Run the detector over a large sample and compare tissue-coverage
    distributions between providers.
 9. Score your detector against the label masks on a few hundred slides.
@@ -1142,6 +1157,13 @@ tissue can be labelled 0. If your detector finds more tissue than the mask
 does, that is not automatically wrong. Look at those regions before tightening
 anything.
 
+**Start from what Stage 2 measured.** Median saturation over the non-blank
+pixels is 88.3 on Karolinska and 64.6 on Radboud, so the two hospitals are a
+long way apart before you tune anything. Do not expect a single fixed
+saturation cut to serve both; check the number you pick against both
+distributions rather than against a sample of slides that happened to be
+convenient.
+
 **Fixed threshold or per-slide automatic.** A single fixed number is
 predictable and easy to reason about, but may not suit both providers. An
 automatic per-slide method adapts, which usually generalises better across
@@ -1154,12 +1176,35 @@ for both. If you genuinely cannot find one, remember that provider-specific
 settings require knowing the provider at test time — verify that `test.csv`
 carries that column before depending on it.
 
-**Pen removal is dangerous.** Hematoxylin stains cell nuclei blue-purple. A
-loosely specified "remove blue" filter deletes exactly the tissue you need.
-Only build one if Stage 2 found actual pen; tune it against those specific
-slides; and then verify against slides you know are clean that it removes
-essentially nothing. If it eats more than a fraction of a percent of a clean
-slide, it is too aggressive.
+**Pen ink: rank with it, do not exclude on it.** Stage 2 found ink on 317
+slides, all Radboud, and measured that a median 61% of ink pixels sit on or
+against tissue. So a rule that skips inked tiles would delete real biopsy —
+and delete it only during training, since test slides carry no ink at all.
+That is the same train-and-test mismatch this whole rebuild exists to remove,
+just pointing the other way.
+
+The distinction that resolves it: ink must not *count as tissue* in the score
+that ranks candidate tiles, but a tile holding tissue and ink still qualifies
+and still gets chosen. Nothing is deleted. This only stops a tile that is
+mostly pen stroke from outranking a tile of real glands, which is a documented
+failure of ordinary tissue detection on marked slides.
+
+**Pen removal itself is dangerous, and should wait for evidence.** Hematoxylin
+stains cell nuclei blue-purple, so a loosely specified "remove blue" filter
+deletes exactly the tissue we need. Beyond that, published ink-removal work
+does not support doing it yet. The generative methods report large improvements
+in image-similarity scores but explicitly leave untested whether a cleaned
+slide gives the same prediction as a clean one, and the known failure of that
+family is inventing tissue texture — which for a grading task means fabricating
+the gland structure the grade is read from.
+
+So the order is: rank correctly first, measure whether ink actually influences
+the model second (Stage 12), and only then, if it does, replace ink pixels with
+plain background. Background rather than invented texture, because a white
+patch reads as glass, which exists on every slide, while a hallucinated gland
+does not. If you do build such a filter, tune it on the marked slides and then
+check on slides you know are clean that it removes essentially nothing — more
+than a fraction of a percent of a clean slide means it is too aggressive.
 
 ### Leave behind
 
@@ -1602,6 +1647,10 @@ whole pipeline live.
 3. Attach the offline encoder weights from Stage 7.
 4. Submit, even if the model on top is crude.
 5. Compare the resulting score against your cross-validation number.
+6. Report cross-validation separately for the pen-marked slides and the
+   pen-free Radboud slides, alongside the Radboud-to-Karolinska number.
+7. Stress-test the pen question: take slides with no ink, paste ink borrowed
+   from the marked ones onto them, and see whether the prediction moves.
 
 ### The judgment calls
 
@@ -1619,6 +1668,22 @@ straight loop. Roughly forty lines of code.
 information about generalisation rather than as a bug. If the gap is large,
 that is the domain-shift problem showing up, and it is worth understanding
 before optimising anything else.
+
+**The pen stress test is how the ink question gets settled.** Stage 2 found
+that ink is not spread evenly across grades — among marked slides, ISUP 1 is
+over-represented and ISUP 0 under-represented — so a model can learn "ink means
+not grade 0" and collect free accuracy that is worth nothing on a pen-free test
+set. That is a correlation in our data, not proof the model uses it, and the
+way to find out is to add ink to clean slides and watch whether predictions
+move. Published work on artifacts in prostate models recommends exactly this:
+synthesise the artifact and measure, rather than reason about it.
+
+Do not reach for colour augmentation or stain normalisation to fix it. The
+largest study of this problem found that site-specific signatures stayed
+detectable at better than 0.85 AUROC after normalisation, and concluded that
+normalisation and augmentation do not stop models learning them. What did work
+there was arranging the evaluation so the confounder could not inflate it,
+which is what step 6 above does for us.
 
 ### Leave behind
 
@@ -1638,12 +1703,18 @@ A working submission notebook and a real external score. Findings log answer:
 Do none of these until Stages 1 through 12 are complete and there is an
 external number. Ordered by expected value.
 
-**Resolution matching between providers.** If Stage 1 confirmed the roughly
-two-fold difference in microns per pixel, make both providers' tiles cover the
-same physical area rather than the same pixel count. This directly attacks the
-domain-shift problem from Part 1.5, and it may be worth more than everything
-else on this list. It also generalises: a pipeline that handles two scanners at
-different scales handles a third by changing a configuration value.
+**Resolution matching between providers — no longer applicable here, but keep
+the mechanism.** This item existed because of the widely repeated claim that
+Radboud scans at roughly 0.24 microns per pixel and Karolinska at roughly 0.48.
+Stage 1 measured all 10,616 slides and found otherwise: Radboud is 0.4862
+throughout, Karolinska is 0.4520 or 0.5032. The two hospitals are at the same
+scale in our copy of the data, so tiles of a fixed pixel size already cover the
+same physical area and there is nothing to correct.
+
+Keep the idea available anyway. The moment a third source arrives — the Lahore
+cohort especially — its scanner will have its own microns per pixel, and
+choosing tile size in microns rather than pixels is what makes that a
+configuration change instead of a re-extraction.
 
 **Stain normalisation.** Transform every tile's colours toward a common
 reference so the providers look alike. Measure it — it does not always help,
@@ -1725,6 +1796,17 @@ notebook cannot be resumed after a kernel dies.
 `slide_inventory.parquet` from Stage 1, `duplicate_groups.parquet` from
 Stage 3. Parquet rather than CSV, because a CSV turns every number back into a
 string on the way in and quietly changes types under you.
+
+**Rebuildable bulk data** goes one level down, in `data/derived/cache/`, and is
+not tracked in git. The distinction is whether losing the file costs you a
+finding or only some time: `slide_inventory.parquet` is a result, while the
+thumbnail cache (`thumbnails_256.npy` plus its `_ids.npy`) and the hash distance
+matrix are things any machine can regenerate by rerunning the notebook.
+
+Put the settings that produced a cached file into its name —
+`hamming_phash16_smallest_level.npy` rather than `distances.npy`. A cache whose
+name does not describe its contents will one day be reused after the code that
+built it has changed, and nothing will report the mismatch.
 
 The fold assignment is the exception. It lives at `data/folds.csv`, it is small,
 and it is committed to git — it is the one file whose exact contents must
