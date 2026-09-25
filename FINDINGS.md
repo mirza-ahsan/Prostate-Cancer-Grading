@@ -237,6 +237,146 @@ pyramid level and the name no longer matches, so it rebuilds instead of silently
 reusing a stale file.
 
 
+### Stage 4 — folds
+
+Measured 2026-09-09, from `notebooks/04_folds.ipynb`, saved as `data/folds.csv`
+(10,616 rows, committed to git).
+
+**Five folds, grouped by duplicate cluster and stratified on grade and hospital
+together.** `StratifiedGroupKFold` with seed 0. Three seeds were tried; the
+metric for choosing was the largest drift of any grade or hospital share in any
+fold away from the dataset as a whole. Seed 0 gave 0.0005, seeds 1 and 2 gave
+0.0006 — so the choice barely mattered, which is itself worth knowing.
+
+**The balance is better than expected.** Worst drift of five hundredths of a
+percentage point:
+
+| fold | ISUP 0 | 1 | 2 | 3 | 4 | 5 | Karolinska | Radboud |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0.2723 | 0.2515 | 0.1267 | 0.1173 | 0.1173 | 0.1149 | 0.5144 | 0.4856 |
+| 1 | 0.2727 | 0.2511 | 0.1262 | 0.1168 | 0.1178 | 0.1154 | 0.5134 | 0.4866 |
+| 2 | 0.2723 | 0.2511 | 0.1267 | 0.1168 | 0.1178 | 0.1154 | 0.5144 | 0.4856 |
+| 3 | 0.2721 | 0.2514 | 0.1266 | 0.1168 | 0.1177 | 0.1153 | 0.5137 | 0.4863 |
+| 4 | 0.2727 | 0.2506 | 0.1262 | 0.1173 | 0.1178 | 0.1154 | 0.5139 | 0.4861 |
+| overall | 0.2724 | 0.2511 | 0.1265 | 0.1170 | 0.1177 | 0.1153 | 0.5139 | 0.4861 |
+
+Fold sizes are 2,123, 2,123, 2,123, 2,124, 2,123.
+
+The handbook warned that grouping would fight stratification hardest on
+Radboud, since duplicates are ten times more common there. It did not bind:
+duplicate groups top out at 4 slides, which leaves the splitter plenty of room.
+Worth recording so nobody re-litigates it.
+
+**No duplicate group straddles a fold.** Asserted, not assumed. This is the
+check the whole stage exists for.
+
+**Pen-marked slides are spread across folds:** 66, 62, 64, 61, 64 against 63
+expected if perfectly even. Stage 12 can report a score on them separately.
+
+**The file is never regenerated.** The notebook refuses to overwrite an
+existing `data/folds.csv` — re-running reports whether the file on disk matches
+what the run produced and leaves it alone. Replacing it takes a deliberate
+manual delete. Every result recorded from here on is measured against this file.
+
+### Stage 5 — tissue detection
+
+Measured 2026-09-16, from `notebooks/05_tissue_detection.ipynb`.
+
+**The detector.** Convert to HSV, keep pixels whose saturation exceeds a fixed
+cut, subtract pen ink (saturation above 60 with hue in the green-to-blue window
+30-135, where stained tissue never sits), clean up with morphological opening
+then closing, and drop connected blobs under 40 pixels at the smallest pyramid
+level. It reads the image and nothing else — no masks, no CSVs, no hospital.
+
+**Settings chosen: a fixed saturation cut of 15**, minimum component area 40
+pixels at the smallest level. Not the per-slide automatic alternative.
+
+**Why fixed rather than per-slide Otsu.** Otsu picks a cut from each slide's own
+histogram, clamped here to 20-60. It lost on every measure, on both hospitals:
+
+| | mean cancer recall | std | worst slide |
+|---|---|---|---|
+| Karolinska, fixed cut 30 | 0.904 | 0.058 | 0.721 |
+| Karolinska, Otsu clamped | 0.863 | 0.065 | 0.570 |
+| Radboud, fixed cut 30 | 0.961 | 0.038 | 0.794 |
+| Radboud, Otsu clamped | 0.934 | 0.057 | 0.753 |
+
+Precision was effectively tied. The worst-slide column decided it: on its worst
+Karolinska slide Otsu loses 43% of the annotated cancer against the fixed cut's
+28%. Since missed tissue is the expensive error, the tail matters more than the
+average. A fixed number is also one value to record in a manifest rather than a
+procedure whose output we cannot predict on a slide we have not seen.
+
+**Why 15 and not 30.** 30 was an arbitrary starting point. Sweeping the cut
+against annotated cancer recall, on 80 slides per hospital that have masks:
+
+| cut | Karolinska mean / worst | Radboud mean / worst | tissue kept, mm² K / R |
+|---|---|---|---|
+| 10 | 0.954 / 0.867 | 0.993 / 0.945 | 6.29 / 5.67 |
+| 15 | 0.934 / 0.832 | 0.986 / 0.914 | 6.13 / 5.51 |
+| 20 | 0.918 / 0.800 | 0.977 / 0.873 | 6.04 / 5.39 |
+| 25 | 0.903 / 0.761 | 0.964 / 0.808 | 5.95 / 5.29 |
+| 30 | 0.885 / 0.667 | 0.941 / 0.722 | 5.87 / 5.16 |
+| 40 | 0.838 / 0.309 | 0.841 / 0.166 | 5.64 / 4.49 |
+
+Lower is monotonically better for recall and the cost is small: going from 30 to
+15 gains about 5 points of mean cancer recall on Karolinska and 4.5 on Radboud,
+and lifts the worst slide from 0.667 to 0.832, while keeping only 4-7% more
+tissue by area. If a low cut were sweeping in blank glass the area would
+balloon; it creeps, which is the tell that the extra is real tissue.
+
+Confirmed by looking, which is what actually settled it: at cuts of 5, 10, 15
+and 20 on the faintest and a typical slide from each hospital, the extra kept at
+low cuts is the pale ends of real fragments. The grey halo visible around
+Radboud tissue is *not* picked up even at a cut of 5. 15 rather than 10 leaves a
+margin against a paler slide than anything in the sample.
+
+**Scored against the label masks at the chosen setting**, 100 slides per
+hospital. Masks are used here to grade the detector and nowhere else; the
+detector never sees them.
+
+| Hospital | Recall, all labels | Recall, cancer | Precision | Median tissue |
+|---|---|---|---|---|
+| Karolinska | 0.918 | 0.944 | 0.917 | 5.99 mm² |
+| Radboud | 0.787 | 0.991 | 0.998 | 5.42 mm² |
+
+Cancer recall spread: Karolinska mean 0.931, 5th percentile 0.854, worst 0.832;
+Radboud mean 0.986, 5th percentile 0.947, worst 0.914.
+
+**Read the cancer column, not the overall one.** The masks label stroma — the
+pale connective tissue between glands — as tissue, and stroma carries very
+little colour, so a saturation cut misses much of it. That holds Radboud's
+overall recall to 0.79 while its cancer recall is 0.99. Only the second bears on
+the grade. Reporting the combined number alone would argue for dropping the
+threshold further and keeping background for no benefit.
+
+**Tissue coverage is comparable across hospitals; share-of-frame is not.**
+Measured over 200 slides per hospital, the share of the frame kept looks like a
+detector heavily biased against Karolinska — median 0.039 against 0.131. It is
+not. Karolinska frames are 3.9 times larger, and in physical units the detector
+finds slightly *more* tissue there: median 5.94 mm² against 5.26, a ratio of
+1.13, with heavily overlapping distributions.
+
+Any per-slide quantity that is a ratio with slide size in its denominator will
+separate the two hospitals cleanly and mean nothing. The notebook now plots both
+and the thin-slide check uses mm² rather than percent — which changes the answer:
+under 1% of frame flagged 1 slide of 400, all Karolinska, while under 1 mm² of
+tissue flags 4, evenly split between the hospitals. The percentage version was
+hiding genuinely thin Radboud slides.
+
+**`3790f55cad63053e956fb73027179707` has no detectable tissue.** The Karolinska
+slide that measured exactly 100% blank in Stage 2 returns 0.0% of frame at every
+saturation cut from 5 to 30. It is not a threshold problem. Either an empty scan
+or tissue below the 40-pixel component floor; worth one look at full resolution
+before Stage 6 meets it.
+
+**A smaller asymmetry that does survive.** Cancer recall is 0.944 on Karolinska
+against 0.991 on Radboud. Precision runs the other way, 0.917 against 0.998, so
+on Karolinska the detector keeps *more* unannotated material rather than less —
+which is not the signature of being too strict. This may be a real gap or it may
+reflect the two hospitals' annotation protocols, since Karolinska masks carry 3
+classes and Radboud's carry 6. Unresolved.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -251,6 +391,16 @@ reusing a stale file.
 
 - Why are duplicates ten times more common in Radboud than Karolinska? Is it a
   scanning practice, or an artefact of how each hospital assembled its cases?
+
+**Stage 5 — tissue detection**
+
+- Is the Karolinska/Radboud cancer-recall gap (0.944 against 0.991) a real
+  detector weakness, or an artefact of the two annotation protocols?
+- The threshold sweep was still improving at a cut of 10 and was not tested
+  below it, so the floor is unknown. Does `MIN_COMPONENT_AREA = 40` still suit a
+  cut of 15, given the two were tuned against each other at 30?
+- Is `3790f55cad63053e956fb73027179707` an empty scan, or tissue too small to
+  clear the component floor?
 
 **Stage 6 — tile placement**
 
