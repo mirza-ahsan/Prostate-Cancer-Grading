@@ -280,7 +280,13 @@ manual delete. Every result recorded from here on is measured against this file.
 
 ### Stage 5 — tissue detection
 
-Measured 2026-09-16, from `notebooks/05_tissue_detection.ipynb`.
+Measured 2026-09-16, from `notebooks/05_tissue_detection.ipynb`. Corrected
+2026-09-25: the sweep, the chosen-setting scores and the coverage figures were
+first taken from a side script whose hole-filling step ran once instead of
+twice (an OpenCV argument passed by position rather than by name), so it was a
+slightly weaker detector than the notebook's. Every figure below is now measured
+with the detector exactly as the notebook defines it. The decisions are
+unchanged; individual numbers moved by up to about 4 points.
 
 **The detector.** Convert to HSV, keep pixels whose saturation exceeds a fixed
 cut, subtract pen ink (saturation above 60 with hue in the green-to-blue window
@@ -308,21 +314,23 @@ average. A fixed number is also one value to record in a manifest rather than a
 procedure whose output we cannot predict on a slide we have not seen.
 
 **Why 15 and not 30.** 30 was an arbitrary starting point. Sweeping the cut
-against annotated cancer recall, on 80 slides per hospital that have masks:
+against annotated cancer recall, on 80 slides per hospital that have masks (56
+Karolinska and 58 Radboud of them contain annotated cancer):
 
 | cut | Karolinska mean / worst | Radboud mean / worst | tissue kept, mm² K / R |
 |---|---|---|---|
-| 10 | 0.954 / 0.867 | 0.993 / 0.945 | 6.29 / 5.67 |
-| 15 | 0.934 / 0.832 | 0.986 / 0.914 | 6.13 / 5.51 |
-| 20 | 0.918 / 0.800 | 0.977 / 0.873 | 6.04 / 5.39 |
-| 25 | 0.903 / 0.761 | 0.964 / 0.808 | 5.95 / 5.29 |
-| 30 | 0.885 / 0.667 | 0.941 / 0.722 | 5.87 / 5.16 |
-| 40 | 0.838 / 0.309 | 0.841 / 0.166 | 5.64 / 4.49 |
+| 10 | 0.963 / 0.876 | 0.995 / 0.947 | 6.39 / 5.75 |
+| 15 | 0.946 / 0.845 | 0.989 / 0.923 | 6.21 / 5.62 |
+| 20 | 0.934 / 0.817 | 0.983 / 0.897 | 6.12 / 5.49 |
+| 25 | 0.922 / 0.782 | 0.975 / 0.865 | 6.04 / 5.37 |
+| 30 | 0.908 / 0.721 | 0.961 / 0.794 | 5.98 / 5.28 |
+| 35 | 0.889 / 0.533 | 0.933 / 0.596 | 5.88 / 5.03 |
+| 40 | 0.867 / 0.353 | 0.890 / 0.234 | 5.78 / 4.72 |
 
 Lower is monotonically better for recall and the cost is small: going from 30 to
-15 gains about 5 points of mean cancer recall on Karolinska and 4.5 on Radboud,
-and lifts the worst slide from 0.667 to 0.832, while keeping only 4-7% more
-tissue by area. If a low cut were sweeping in blank glass the area would
+15 gains about 4 points of mean cancer recall on Karolinska and 3 on Radboud,
+and lifts the worst slide from 0.721 to 0.845 on Karolinska and from 0.794 to
+0.923 on Radboud, while keeping only 4-6% more tissue by area. If a low cut were sweeping in blank glass the area would
 balloon; it creeps, which is the tell that the extra is real tissue.
 
 Confirmed by looking, which is what actually settled it: at cuts of 5, 10, 15
@@ -337,32 +345,37 @@ detector never sees them.
 
 | Hospital | Recall, all labels | Recall, cancer | Precision | Median tissue |
 |---|---|---|---|---|
-| Karolinska | 0.918 | 0.944 | 0.917 | 5.99 mm² |
-| Radboud | 0.787 | 0.991 | 0.998 | 5.42 mm² |
+| Karolinska | 0.933 | 0.956 | 0.917 | 6.13 mm² |
+| Radboud | 0.798 | 0.994 | 0.997 | 5.51 mm² |
 
-Cancer recall spread: Karolinska mean 0.931, 5th percentile 0.854, worst 0.832;
-Radboud mean 0.986, 5th percentile 0.947, worst 0.914.
+These are medians over the slides scored. Cancer recall spread, over the 63
+Karolinska and 77 Radboud slides whose masks contain cancer: Karolinska mean
+0.944, 5th percentile 0.865, worst 0.845; Radboud mean 0.989, 5th percentile
+0.956, worst 0.923.
 
 **Read the cancer column, not the overall one.** The masks label stroma — the
 pale connective tissue between glands — as tissue, and stroma carries very
 little colour, so a saturation cut misses much of it. That holds Radboud's
-overall recall to 0.79 while its cancer recall is 0.99. Only the second bears on
+overall recall to 0.80 while its cancer recall is 0.99. Only the second bears on
 the grade. Reporting the combined number alone would argue for dropping the
 threshold further and keeping background for no benefit.
 
 **Tissue coverage is comparable across hospitals; share-of-frame is not.**
-Measured over 200 slides per hospital, the share of the frame kept looks like a
-detector heavily biased against Karolinska — median 0.039 against 0.131. It is
-not. Karolinska frames are 3.9 times larger, and in physical units the detector
-finds slightly *more* tissue there: median 5.94 mm² against 5.26, a ratio of
-1.13, with heavily overlapping distributions.
+Measured over the notebook's sample of 200 slides per hospital, at the chosen
+cut, the share of the frame kept looks like a detector heavily biased against
+Karolinska — median 0.041 against 0.144. It is not. Karolinska frames are 3.7
+times larger, and in physical units the detector finds slightly *more* tissue
+there: median 6.62 mm² against 6.19, a ratio of 1.07, with heavily overlapping
+distributions (5th to 95th percentile 3.21-10.71 mm² for Karolinska, 2.23-10.39
+for Radboud).
 
 Any per-slide quantity that is a ratio with slide size in its denominator will
 separate the two hospitals cleanly and mean nothing. The notebook now plots both
 and the thin-slide check uses mm² rather than percent — which changes the answer:
-under 1% of frame flagged 1 slide of 400, all Karolinska, while under 1 mm² of
-tissue flags 4, evenly split between the hospitals. The percentage version was
-hiding genuinely thin Radboud slides.
+at the chosen cut, under 1% of frame flags none of the 400 slides, while under
+1 mm² of tissue flags 2, both Radboud. The percentage version hides genuinely
+thin Radboud slides, because their small frames make a little tissue look like a
+healthy share.
 
 **`3790f55cad63053e956fb73027179707` has no detectable tissue.** The Karolinska
 slide that measured exactly 100% blank in Stage 2 returns 0.0% of frame at every
@@ -370,8 +383,8 @@ saturation cut from 5 to 30. It is not a threshold problem. Either an empty scan
 or tissue below the 40-pixel component floor; worth one look at full resolution
 before Stage 6 meets it.
 
-**A smaller asymmetry that does survive.** Cancer recall is 0.944 on Karolinska
-against 0.991 on Radboud. Precision runs the other way, 0.917 against 0.998, so
+**A smaller asymmetry that does survive.** Cancer recall is 0.956 on Karolinska
+against 0.994 on Radboud. Precision runs the other way, 0.917 against 0.997, so
 on Karolinska the detector keeps *more* unannotated material rather than less —
 which is not the signature of being too strict. This may be a real gap or it may
 reflect the two hospitals' annotation protocols, since Karolinska masks carry 3
@@ -394,7 +407,7 @@ classes and Radboud's carry 6. Unresolved.
 
 **Stage 5 — tissue detection**
 
-- Is the Karolinska/Radboud cancer-recall gap (0.944 against 0.991) a real
+- Is the Karolinska/Radboud cancer-recall gap (0.956 against 0.994) a real
   detector weakness, or an artefact of the two annotation protocols?
 - The threshold sweep was still improving at a cut of 10 and was not tested
   below it, so the floor is unknown. Does `MIN_COMPONENT_AREA = 40` still suit a
