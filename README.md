@@ -31,9 +31,11 @@ submitted. Rebuilding that half correctly is what this repository does.
 | 3. Duplicate slides | `03_duplicates` | done |
 | 4. Folds | `04_folds` | done — fold file committed |
 | 5. Tissue detection | `05_tissue_detection` | done |
-| 6. Tile placement | `06_tile_placement` | in progress |
-| 7. Encoder (UNI2-h, offline) | — | next |
-| 8–12. Modules, pilot, extraction, packing, first submission | — | planned |
+| 6. Tile placement | `06_tile_placement` | done |
+| 7. Encoder (UNI2-h, offline) | `07_encoder` | done |
+| 8. Code into modules | `src/` | done |
+| 9. Pilot and reproduction test | — | next |
+| 10–12. Extraction, packing, first submission | — | planned |
 
 The full plan, and the reasoning behind every stage, is in the
 [handbook](docs/01-preprocessing_and_feature_extraction_handbook.md).
@@ -83,6 +85,8 @@ exactly.
 | `03_duplicates` | Which slides are near-copies? | inventory, every slide | `derived/duplicate_groups.parquet`, distance cache | ~8 min first run, then seconds |
 | `04_folds` | How is every result measured? | the three tables above | `folds.csv`, once | seconds |
 | `05_tissue_detection` | Where is the tissue? | inventory, colour stats, masks (scoring only) | nothing: its output is the detector and its settings | ~4 min |
+| `06_tile_placement` | Which squares does the encoder see? | inventory, colour stats, masks (scoring only) | nothing: it checks `src/tiling.py` | ~1 min |
+| `07_encoder` | Can tiles become features, offline too? | inventory, UNI2-h | `data/weights/uni2h.pt`, once | ~1 min |
 
 **On Kaggle** the notebooks detect the environment themselves. Competition data
 is read from `/kaggle/input/prostate-cancer-grade-assessment/`, and outputs go
@@ -90,6 +94,26 @@ to `/kaggle/working/derived/`. Because each Kaggle notebook runs on its own,
 attach the output of the earlier notebooks as datasets. Each notebook's
 `find_input()` looks for them there, prints where it found each file, and stops
 with a clear message if one is missing.
+Notebooks 5 to 7 also import from `src/`, so attach the project's `src/` folder
+as a dataset too; they find it on their own. The UNI2-h weights go up as a
+separate **private** dataset.
+
+---
+
+## The code in `src/`
+
+Code that is settled, or that more than one notebook needs, lives in `src/`.
+Everything else stays in the notebooks.
+
+| Module | What it holds |
+|---|---|
+| `paths.py` | where the data, derived files and weights are, locally and on Kaggle |
+| `tiling.py` | `get_tiles`: slide file in, tiles out, plus its settings. Imports image libraries only |
+| `encode.py` | UNI2-h loading, online and offline, and `encode_tiles`, the one place the pixel transform lives |
+| `display.py` | `show_positions` and `show_tiles`, the two pictures for checking tiling by eye |
+
+`tiling.py` must never import anything that can reach a label, a mask or a CSV.
+Notebook 6 checks its imports every time it runs.
 
 ---
 
@@ -138,6 +162,9 @@ The short version; the evidence and caveats for each point are in
 - **The tissue detector** (a fixed saturation cut of 15, with ink excluded)
   finds 95.6% of the annotated cancer on Karolinska and 99.4% on Radboud,
   using the label masks only to score it.
+- **Tile placement** (a grid of tile-sized cells, a 5% tissue floor, padded
+  edges, at most 144 tiles) keeps a median 99.4% of the annotated cancer on
+  Karolinska and 99.7% on Radboud, with a median of about 70 tiles per slide.
 
 ---
 
