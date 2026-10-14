@@ -390,6 +390,67 @@ which is not the signature of being too strict. This may be a real gap or it may
 reflect the two hospitals' annotation protocols, since Karolinska masks carry 3
 classes and Radboud's carry 6. Unresolved.
 
+### Stage 6 — tile placement
+
+Measured 2026-09-30 with the grid functions in `notebooks/06_tile_placement.ipynb`
+(`score_grid`, `select_cells`) and its tissue mask, which is identical to
+notebook 5's detector. Sample: 80 slides per hospital that have masks, of which
+103 contain annotated cancer (47 Karolinska, 56 Radboud). The label masks are
+used only to score where the tiles landed, never to place them. Cap of 144
+tiles throughout.
+
+**How much annotated cancer lands inside the chosen tiles.** Share of each
+slide's annotated cancer covered by its tiles, as median / 5th percentile /
+worst slide:
+
+| Setting | Karolinska | Radboud | Tiles per slide, median (max) |
+|---|---|---|---|
+| Detector alone, pixel level | 0.952 / 0.849 / 0.813 | 0.994 / 0.972 / 0.893 | — |
+| Grid, trimmed edges, 10% floor | 0.984 / 0.956 / 0.916 | 0.990 / 0.938 / 0.847 | 62 (104) |
+| Grid, padded edges, 10% floor | 0.984 / 0.956 / 0.916 | 0.990 / 0.972 / 0.847 | 62 (104) |
+| Grid, padded edges, 5% floor | 0.994 / 0.983 / 0.980 | 0.997 / 0.993 / 0.953 | 67 (113) |
+| Grid, padded edges, any tissue | 1.000 / 0.999 / 0.993 | 1.000 / 1.000 / 0.999 | 75 (134) |
+
+No slide lost more than half its cancer under any setting.
+
+**The tiles keep more cancer than the detector marks.** A tile is a whole
+square, so it also covers pale cancer lying beside the tissue the detector did
+find. On Karolinska the median rises from 0.952 at pixel level to 0.984 inside
+tiles at a 10% floor; on the worst Radboud slide, from 0.893 to 0.953 at a 5%
+floor.
+
+**Pad the edges rather than trim them.** Trimming discards the last partial
+row and column of cells. Padding scores them too, which lifts Radboud's 5th
+percentile from 0.938 to 0.972 with no change in tile count.
+
+**The floor is where cancer is lost.** Moving from 10% to 5% raises the worst
+slide from 0.916 to 0.980 on Karolinska and from 0.847 to 0.953 on Radboud, for
+about 5 more tiles per slide. Going down to any tissue at all recovers almost
+everything but adds about 10 tiles per slide that are mostly blank glass. The
+full sweep, 0% to 25% in steps of 5%, is in the notebook; above 10% the worst
+slide keeps falling, to 0.788 on Karolinska and 0.822 on Radboud at 25%.
+
+**What the tiles between floors look like.** Below 5%: mostly glass, with a
+sliver of tissue or a dye-coated edge at one side. From 5% to 10%: thin strips
+of real tissue along the edge of a fragment, none blank. From 10% to 25%: many
+are tissue edges covered in blue marking dye, which the detector removes as
+ink, so their tissue fraction understates the tissue they hold.
+
+**Decision: 5% floor, padded edges, cap 144.** Chosen from the sweep and the
+band grids above.
+
+**Tile counts at that setting.** On a separate sample of 120 slides (60 per
+hospital): median 72 tiles per slide on Karolinska and 66 on Radboud, fewest
+26. The cap of 144 binds on 1 slide in 120.
+
+**Overhang is small.** With padded edges, 28 of 7,966 tiles (0.35%) reach past
+the slide edge; the white compositing fills the part outside.
+
+**Tile count varies by grade.** Median tiles per slide by ISUP grade on the
+same 120 slides: 73, 70, 65, 65.5, 77.5 and 57 for grades 0 to 5. There is no
+steady trend, but grade 5 gets the fewest. The sample is small; see the open
+question below.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -417,7 +478,11 @@ classes and Radboud's carry 6. Unresolved.
 
 **Stage 6 — tile placement**
 
-- What fraction of tiles overhang the edge of the slide?
+- Does the number of tiles per slide carry grade information a model could
+  use as a shortcut? The medians by grade above come from 120 slides; measure
+  it over all slides once features are extracted.
+- The tissue fraction understates dye-coated tissue edges. Does that drop any
+  cancer that matters, or are those edges almost always benign?
 
 **Later**
 
