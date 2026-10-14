@@ -52,3 +52,5 @@ ignore = ["B018"]
 [tool.black]
 line-length = 120
 
+[tool.pyrefly]
+search-path = ["."]
