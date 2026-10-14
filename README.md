@@ -67,7 +67,7 @@ data/
 
 From Stage 7 on you need access to [UNI2-h](https://huggingface.co/MahmoodLab/UNI2-h),
 which is gated: request access on HuggingFace, then log in once with
-`.venv/bin/python -m huggingface_hub.commands.huggingface_cli login`. Never
+`.venv/bin/python -m huggingface_hub.cli.hf auth login`. Never
 commit or paste the token.
 
 ---

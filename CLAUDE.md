@@ -58,7 +58,7 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
    (inventory, colour stats, duplicate groups) and `data/folds.csv`.
    `data/derived/cache/` is rebuildable and not tracked.
 4. UNI2-h is gated on HuggingFace. Request access, then log in once with
-   `.venv/bin/python -m huggingface_hub.commands.huggingface_cli login`. The
+   `.venv/bin/python -m huggingface_hub.cli.hf auth login`. The
    token lives in `~/.cache/huggingface/token`, outside the repo. Then run
    notebook 7 once: it saves the weights to `data/weights/uni2h.pt` (fp32
    state_dict, 2.73 GB). `*.pt` and `weights/` are git-ignored.
@@ -67,9 +67,20 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
    on `sys.path`; notebook 9's only adds the repo root so far. Scripts run from
    the repo root need `PYTHONPATH=.`.
 
-Current local machine: Linux, NVIDIA RTX A1000 Laptop GPU with 4 GB. UNI2-h in
-fp16 takes about 1.4 GB, so a Jupyter kernel holding the model plus a second
-process loading it will run out of GPU memory. Check `nvidia-smi` first.
+Two local machines. Check `nvidia-smi` first on either.
+
+- **Laptop:** Linux, NVIDIA RTX A1000 Laptop GPU with 4 GB. UNI2-h in fp16
+  takes about 1.4 GB, so a Jupyter kernel holding the model plus a second
+  process loading it will run out of GPU memory. Every timing recorded through
+  Stage 7 was measured here.
+- **This PC:** Linux, AMD Ryzen 7 7700 (8 cores, 16 threads), 14 GB RAM,
+  NVIDIA RTX 4060 with 8 GB (driver 610.57). The display already holds about
+  0.7 GB of that. Notebook 7 re-run here on 2026-10-14: same results, 1.31 s
+  per slide. Whether two processes holding the model fit at once has not been
+  checked. Notebooks run on the Jupyter kernel `pcg`, which points at this
+  repo's `.venv`. uv writes `version_info = 3.12` into `.venv/pyvenv.cfg`,
+  which VS Code shows as "Python 3.12.undefined"; setting it to the full
+  version (3.12.14) fixes the label and changes nothing else.
 
 ## Kaggle
 
@@ -115,10 +126,15 @@ process loading it will run out of GPU memory. Check `nvidia-smi` first.
 - Tiles: grid of tile-sized cells (~56 mask px), 5% tissue floor, padded edges,
   cap 144, ordered by tissue fraction with ties broken on (row, col), then put
   in reading order. Median ~70 tiles per slide.
-- Encoder: UNI2-h, frozen, fp16 on GPU (cosine ≥ 0.99998 against fp32). The
-  offline path matches the online path exactly. Tiling plus encoding takes
-  about 2.0 s per slide on the A1000: ~34 min per 1,000 slides, ~6 h for the
-  training set.
+- Encoder: UNI2-h, frozen, fp16 on GPU (cosine ≥ 0.99997 against fp32). The
+  offline path matches the online path exactly. `uni2h.pt` is bit-identical to
+  the HuggingFace weights; its sha256 is in FINDINGS.md. Tiling plus encoding
+  takes 1.96 s per slide on the A1000 (~33 min per 1,000 slides, ~5.8 h for
+  the training set) and 1.31 s on the RTX 4060 (~22 min, ~3.9 h). Encoding is
+  about 90% of it.
+- Features repeat exactly on one GPU but differ slightly between GPUs (fp16
+  arithmetic). The Stage 9 reproduction test needs a feature tolerance when
+  machines differ; coordinates must still match exactly.
 - Microns per pixel are about the same on both hospitals, so tile size is set
   in pixels.
 
