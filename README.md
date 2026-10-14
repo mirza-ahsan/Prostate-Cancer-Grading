@@ -34,7 +34,7 @@ submitted. Rebuilding that half correctly is what this repository does.
 | 6. Tile placement | `06_tile_placement` | done |
 | 7. Encoder (UNI2-h, offline) | `07_encoder` | done |
 | 8. Code into modules | `src/` | done |
-| 9. Pilot and reproduction test | — | next |
+| 9. Pilot and reproduction test | `09_pilot_study` | in progress |
 | 10–12. Extraction, packing, first submission | — | planned |
 
 The full plan, and the reasoning behind every stage, is in the
@@ -87,6 +87,7 @@ exactly.
 | `05_tissue_detection` | Where is the tissue? | inventory, colour stats, masks (scoring only) | nothing: its output is the detector and its settings | ~4 min |
 | `06_tile_placement` | Which squares does the encoder see? | inventory, colour stats, masks (scoring only) | nothing: it checks `src/tiling.py` | ~1 min |
 | `07_encoder` | Can tiles become features, offline too? | inventory, UNI2-h | `data/weights/uni2h.pt`, once | ~1 min |
+| `09_pilot_study` | Does tissue placement beat a blind grid? | inventory, UNI2-h, `folds.csv` (training only) | `data/features/<version>/`: per-slide `.pt` and `manifest.json`, for a tissue set and a grid set | ~2 h first run, then ~20 min |
 
 **On Kaggle** the notebooks detect the environment themselves. Competition data
 is read from `/kaggle/input/prostate-cancer-grade-assessment/`, and outputs go

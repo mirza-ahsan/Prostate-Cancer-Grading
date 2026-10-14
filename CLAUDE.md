@@ -62,10 +62,9 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
    token lives in `~/.cache/huggingface/token`, outside the repo. Then run
    notebook 7 once: it saves the weights to `data/weights/uni2h.pt` (fp32
    state_dict, 2.73 GB). `*.pt` and `weights/` are git-ignored.
-5. Run notebooks from the `notebooks/` folder. Notebooks 5 to 7 start with a
+5. Run notebooks from the `notebooks/` folder. Notebooks 5 onward start with a
    bootstrap cell that puts the repo root (or `/kaggle/input/*/src` on Kaggle)
-   on `sys.path`; notebook 9's only adds the repo root so far. Scripts run from
-   the repo root need `PYTHONPATH=.`.
+   on `sys.path`. Scripts run from the repo root need `PYTHONPATH=.`.
 
 Two local machines. Check `nvidia-smi` first on either.
 
@@ -142,22 +141,29 @@ Two local machines. Check `nvidia-smi` first on either.
 
 - Pilot: 2,000 slides from `train_test_split`, stratified on (ISUP grade,
   provider), `random_state=42`.
-- Tissue set: `get_tiles` → `encode_tiles` → one `.pt` per slide in
-  `TISSUE_EMBED_PATH`.
-- Floor set ("exhaustive"): `get_grid_tiles` in the notebook places up to 144
-  tiles on an evenly spaced grid over the whole slide, ignoring tissue (~74%
-  blank glass), and uses the same `read_tiles` and `encode_tiles`. Saved in
-  `EXHAUSTIVE_EMBED_PATH`. It is a floor that the tissue set must clearly beat.
-- Known gaps, not yet fixed:
-  - the output folders sit under `DATA_DIR`, which is read-only on Kaggle;
-    `DERIVED_DIR` works in both places;
-  - the tissue loop does not create its folder;
-  - only features are saved, not coords. The reproduction test needs coords,
-    and the handbook requires a version string and a manifest per feature set.
-- Still to do: train a simple model on both sets using `data/folds.csv`,
-  record both scores (mixed folds and Radboud→Karolinska), then the saved
-  reproduction test on five slides (re-tile and re-encode from the `.tiff`,
-  compare coords and features against what is stored).
+- Two feature sets over the same slides, in the per-slide format the full run
+  will use: `data/features/<version>/slides/<slide_id>.pt` (on Kaggle,
+  `/kaggle/working/features/`), each file holding features, level-0 coords,
+  tissue fraction (`None` for the grid set), the version and the GPU. Writes
+  are atomic and extraction skips slides already saved, so a re-run resumes.
+  - Tissue set `uni2h-L1-224-t144-hsv-v1`: `get_tiles` → `encode_tiles`.
+  - Grid set `uni2h-L1-224-g144-grid-v1`: `get_grid_tiles` in the notebook
+    places up to 144 tiles on an evenly spaced grid over the whole slide,
+    ignoring tissue (~74% blank glass), with the same `read_tiles` and
+    `encode_tiles`. It is a floor that the tissue set must clearly beat.
+- `load_set` checks every file of a set and lists zero-tile slides;
+  `write_manifest` writes `manifest.json` (tracked in git; the `.pt` files are
+  not) with the handbook Part 7 fields, `masks_used: false` and the weights
+  sha256. The manifest records `git describe --dirty`, so commit the notebook
+  before the run that writes it.
+- Baselines, in the notebook: mean pool + logistic regression, and gated ABMIL
+  with fixed settings (hidden 512, dropout 0.25, AdamW 1e-4, weight decay
+  1e-5, cosine, 20 epochs, cross-entropy, no early stopping), each on mixed
+  folds and Radboud→Karolinska from `data/folds.csv`, with a paired bootstrap
+  interval on tissue minus grid.
+- Still to do: record both scores, then the saved reproduction test on five
+  slides (re-tile and re-encode from the `.tiff`, compare coords exactly and
+  features within a tolerance when the GPU differs).
 
 ## How we work
 
