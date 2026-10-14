@@ -451,6 +451,55 @@ same 120 slides: 73, 70, 65, 65.5, 77.5 and 57 for grades 0 to 5. There is no
 steady trend, but grade 5 gets the fewest. The sample is small; see the open
 question below.
 
+### Stage 7 — encoder
+
+Measured 2026-09-30 on the laptop (RTX A1000, 4 GB) and again 2026-10-14 on the
+desktop (RTX 4060, 8 GB), from `notebooks/07_encoder.ipynb`. Both runs use the
+same 32 test tiles (16 from one slide per hospital, seed 0) and the same 20
+timed slides.
+
+**The model's own settings match ours.** 224 x 224 input, ImageNet mean and
+standard deviation, 681 million parameters, as read from the model's
+`pretrained_cfg` rather than assumed.
+
+**fp16 costs nothing that matters.** Lowest cosine similarity against full
+precision over 4 tiles: 0.999977 on the laptop, 0.999976 on the desktop.
+
+**The offline path equals the online path exactly**, on both machines: largest
+difference 0.0, with the network blocked during loading and encoding. Two runs
+on the same tiles are identical.
+
+**The weights file is the published model, bit for bit.** `data/weights/uni2h.pt`
+(2,725,701,806 bytes, 343 fp32 tensors, 681,394,176 parameters) has the same
+keys as HuggingFace's `pytorch_model.bin` at snapshot `d517a8dd`, every tensor
+equal to it, and loads strictly into the network built from `src/encode.py`.
+sha256 `fabfb136dea151098c74610157fceeebff66c537af32d8908a54325b9bc16bff`;
+checked on the desktop 2026-10-14. A copy anywhere else (laptop, Kaggle
+dataset) is the same file only if this hash matches.
+
+**Features are repeatable on one GPU, but not identical across GPUs.** The same
+tiles through the same weights printed a lowest feature value of -2.213 on the
+laptop and -2.215 on the desktop, and the fp16 cosine moved in the sixth
+decimal. Tiling is deterministic and the libraries come from one lock file, so
+the difference is the GPUs' fp16 arithmetic. This is read from the printed
+summaries only; the size of the per-feature difference has not been measured.
+It matters for Stage 9: a reproduction test that compares features extracted
+on one machine against features recomputed on another needs a tolerance, while
+coordinates must still match exactly.
+
+**Encoding is the cost, not tiling.** Seconds per slide over the 20 timed
+slides (10 per hospital), from each run's saved output:
+
+| Machine | Tiling | Encoding | Total | Karolinska / Radboud | 1,000 slides | 10,616 slides |
+|---|---|---|---|---|---|---|
+| Laptop, RTX A1000 | 0.19 | 1.77 | 1.96 | 2.22 / 1.70 | 33 min | 5.8 h |
+| Desktop, RTX 4060 | 0.15 | 1.16 | 1.31 | 1.46 / 1.16 | 22 min | 3.9 h |
+
+Mean tiles per timed slide: 76.9 Karolinska, 65.7 Radboud, the same on both
+machines. Encoding is about 90% of the time on both, so a faster GPU is what
+moves the total. Both fit inside 60% of a 9-hour limit, but that limit is not
+confirmed for PANDA and Kaggle's GPU has not been timed.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -484,8 +533,15 @@ question below.
 - The tissue fraction understates dye-coated tissue edges. Does that drop any
   cancer that matters, or are those edges almost always benign?
 
+**Stage 7 — encoder**
+
+- How large is the per-feature difference between GPUs, and is it the same
+  between our machines and Kaggle's? Stage 9's reproduction test needs this to
+  set its tolerance.
+
 **Later**
 
-- Does `test.csv` contain a `data_provider` column?
-- Seconds per slide for tiling plus encoding, on our hardware?
+- The public `test.csv` (3 rows) has an `image_id` and a `data_provider`
+  column. Does the hidden test set's file have the same columns?
+- Seconds per slide for tiling plus encoding on Kaggle's GPU?
 - How many slides are in the hidden test set?
