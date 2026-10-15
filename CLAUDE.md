@@ -155,15 +155,22 @@ Two local machines. Check `nvidia-smi` first on either.
   `write_manifest` writes `manifest.json` (tracked in git; the `.pt` files are
   not) with the handbook Part 7 fields, `masks_used: false` and the weights
   sha256. The manifest records `git describe --dirty`, so commit the notebook
-  before the run that writes it.
+  before the run that writes it. VS Code saves outputs into the notebook during
+  Run All, which marks the manifest `-dirty`; after such a run, commit the
+  notebook, then re-run the cells up to the check cell headless to rewrite the
+  manifests.
 - Baselines, in the notebook: mean pool + logistic regression, and gated ABMIL
   with fixed settings (hidden 512, dropout 0.25, AdamW 1e-4, weight decay
   1e-5, cosine, 20 epochs, cross-entropy, no early stopping), each on mixed
   folds and Radboud→Karolinska from `data/folds.csv`, with a paired bootstrap
   interval on tissue minus grid.
-- Still to do: record both scores, then the saved reproduction test on five
-  slides (re-tile and re-encode from the `.tiff`, compare coords exactly and
-  features within a tolerance when the GPU differs).
+- Pilot done and recorded (FINDINGS.md, Stage 9; manifests at commit
+  `657c9b0`). Tissue clearly beats the grid with ABMIL: 0.824 against 0.745 on
+  mixed folds, 0.689 against 0.517 Radboud→Karolinska. Mean pooling ties
+  cross-site. ABMIL is the head to carry forward.
+- Still to do: the saved reproduction test on five slides (re-tile and
+  re-encode from the `.tiff`, compare coords exactly and features within a
+  tolerance when the GPU differs).
 
 ## How we work
 
