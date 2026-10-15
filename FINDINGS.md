@@ -500,6 +500,61 @@ machines. Encoding is about 90% of the time on both, so a faster GPU is what
 moves the total. Both fit inside 60% of a 9-hour limit, but that limit is not
 confirmed for PANDA and Kaggle's GPU has not been timed.
 
+### Stage 9 — pilot
+
+Measured 2026-10-15 on the desktop (RTX 4060), from
+`notebooks/09_pilot_study.ipynb` at commit `657c9b0`. The pilot is 2,000 slides
+(1,029 Karolinska, 971 Radboud) from `train_test_split`, stratified on ISUP
+grade and hospital, `random_state=42`. Both feature sets cover the same slides;
+their manifests are in `data/features/<version>/manifest.json`.
+
+| Feature set | Version | Tiles | Per slide: median (min to max) | Extraction |
+|---|---|---|---|---|
+| Tissue (`get_tiles`) | `uni2h-L1-224-t144-hsv-v1` | 129,405 | 65 (6 to 144) | 38 min |
+| Grid, tissue ignored | `uni2h-L1-224-g144-grid-v1` | 262,476 | 143 (4 to 144) | 73 min |
+
+No slide had zero tiles in either set. The tissue set's 38 minutes for 2,000
+slides (1.14 s per slide) is in line with Stage 7's 1.31 s.
+
+**Tissue beats the grid clearly with ABMIL, under both protocols.** Quadratic
+weighted kappa over all scored slides; the interval is the 95% paired bootstrap
+interval of tissue minus grid (2,000 resamples of slides). Mixed is 5-fold on
+`data/folds.csv`; Radboud to Karolinska trains on the Radboud slides of four
+folds and tests on the Karolinska slides of the fifth, pooled over the five.
+
+| Head | Protocol | Scored on | Slides | Tissue | Grid | Tissue − grid [95%] |
+|---|---|---|---|---|---|---|
+| Mean pool + logistic regression | mixed | all | 2,000 | 0.750 | 0.711 | +0.039 [0.011, 0.065] |
+| | mixed | Karolinska | 1,029 | 0.708 | 0.600 | +0.108 [0.057, 0.158] |
+| | mixed | Radboud | 971 | 0.716 | 0.706 | +0.010 [−0.029, 0.052] |
+| | Radboud → Karolinska | Karolinska | 1,029 | 0.423 | 0.439 | −0.016 [−0.079, 0.045] |
+| Gated ABMIL | mixed | all | 2,000 | 0.824 | 0.745 | +0.079 [0.056, 0.103] |
+| | mixed | Karolinska | 1,029 | 0.826 | 0.624 | +0.202 [0.151, 0.256] |
+| | mixed | Radboud | 971 | 0.784 | 0.768 | +0.016 [−0.008, 0.040] |
+| | Radboud → Karolinska | Karolinska | 1,029 | 0.689 | 0.517 | +0.172 [0.114, 0.232] |
+
+ABMIL settings were fixed in advance and not tuned: hidden 512, attention 256,
+dropout 0.25, AdamW 1e-4, weight decay 1e-5, cosine, 20 epochs, cross-entropy,
+no early stopping. Mean pooling only separates the sets on mixed folds; from
+Radboud to Karolinska the two tie at about 0.43. ABMIL is the head to carry
+forward.
+
+**The gain is almost all on Karolinska.** On mixed folds tissue gains +0.202
+(ABMIL) and +0.108 (mean pool) on Karolinska, against +0.016 and +0.010 on
+Radboud, where both intervals include zero. This fits Stage 2: Karolinska
+slides are about 96% blank glass against 85% for Radboud, so an evenly spaced
+grid wastes more tiles there. The cross-site test set is all Karolinska, so
+part of the +0.172 is likely the same effect.
+
+**Training repeats on one GPU.** A headless run and a VS Code run of the same
+code on the RTX 4060 gave the same eight scores and sixteen interval bounds to
+three decimals.
+
+**Not comparable to the handbook's 0.247.** That published Radboud to
+Karolinska score used UNI and its own split. Ours trains on 759 to 787 pilot
+Radboud slides per fold, with UNI2-h. Every score here is one seed on a fifth
+of the training set.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -538,6 +593,15 @@ confirmed for PANDA and Kaggle's GPU has not been timed.
 - How large is the per-feature difference between GPUs, and is it the same
   between our machines and Kaggle's? Stage 9's reproduction test needs this to
   set its tolerance.
+
+**Stage 9 — pilot**
+
+- How much do the pilot scores move with another seed? Each number above is
+  one run.
+- Why does mean pooling collapse from Radboud to Karolinska (about 0.43) while
+  ABMIL keeps 0.689 on the same features?
+- How much of tissue's cross-site gain is the blank-glass difference between
+  the hospitals rather than better tiles?
 
 **Later**
 
