@@ -140,7 +140,8 @@ Two local machines. Check `nvidia-smi` first on either.
 ## Stage 9 so far (`notebooks/09_pilot_study.ipynb`)
 
 - Pilot: 2,000 slides from `train_test_split`, stratified on (ISUP grade,
-  provider), `random_state=42`.
+  provider), `random_state=42`. `ALL_SLIDES` (default `True`) runs every
+  slide instead; extraction then reuses the pilot's files.
 - Two feature sets over the same slides, in the per-slide format the full run
   will use: `data/features/<version>/slides/<slide_id>.pt` (on Kaggle,
   `/kaggle/working/features/`), each file holding features, level-0 coords,
@@ -154,11 +155,15 @@ Two local machines. Check `nvidia-smi` first on either.
 - `load_set` checks every file of a set and lists zero-tile slides;
   `write_manifest` writes `manifest.json` (tracked in git; the `.pt` files are
   not) with the handbook Part 7 fields, `masks_used: false` and the weights
-  sha256. The manifest records `git describe --dirty`, so commit the notebook
-  before the run that writes it. VS Code saves outputs into the notebook during
-  Run All, which marks the manifest `-dirty`; after such a run, commit the
-  notebook, then re-run the cells up to the check cell headless to rewrite the
-  manifests.
+  sha256. The manifest records the commit, with `-dirty` if any tracked file
+  other than a manifest has changed, so commit the notebook before the run
+  that writes it. VS Code saves outputs into the notebook during Run All, which
+  marks the manifest `-dirty`; after such a run, commit the notebook, restore
+  the manifests with `git checkout`, then re-run the cells up to the check cell
+  headless to rewrite them.
+- A slide that errors during extraction is printed as `FAILED`, listed, and
+  skipped; `load_set` then stops on it as missing. Training loads one feature
+  set at a time (the full grid set is 4.2 GB in RAM).
 - Baselines, in the notebook: mean pool + logistic regression, and gated ABMIL
   with fixed settings (hidden 512, dropout 0.25, AdamW 1e-4, weight decay
   1e-5, cosine, 20 epochs, cross-entropy, no early stopping), each on mixed
@@ -168,6 +173,13 @@ Two local machines. Check `nvidia-smi` first on either.
   `657c9b0`). Tissue clearly beats the grid with ABMIL: 0.824 against 0.745 on
   mixed folds, 0.689 against 0.517 Radboud→Karolinska. Mean pooling ties
   cross-site. ABMIL is the head to carry forward.
+- Run on all 10,616 slides done 2026-10-22 and recorded (FINDINGS.md, Stage 9
+  — all slides; manifests at commit `b778b50`). The tissue set covers every
+  slide (one zero-tile slide, `3790f55c...`, the blank one); this is the
+  Stage 10 extraction for that version, done ahead of the reproduction test.
+  ABMIL: 0.864 against 0.806 mixed, 0.596 against 0.449 Radboud→Karolinska.
+  Mean pooling on tissue falls to 0.140 cross-site, below the grid; cross-site
+  scores dropped from the pilot while mixed rose. Both unexplained.
 - Still to do: the saved reproduction test on five slides (re-tile and
   re-encode from the `.tiff`, compare coords exactly and features within a
   tolerance when the GPU differs).
