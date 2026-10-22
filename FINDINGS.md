@@ -506,7 +506,8 @@ Measured 2026-10-15 on the desktop (RTX 4060), from
 `notebooks/09_pilot_study.ipynb` at commit `657c9b0`. The pilot is 2,000 slides
 (1,029 Karolinska, 971 Radboud) from `train_test_split`, stratified on ISUP
 grade and hospital, `random_state=42`. Both feature sets cover the same slides;
-their manifests are in `data/features/<version>/manifest.json`.
+their pilot manifests are in `data/features/<version>/manifest.json` as of
+commit `2ff66b4` (the run on all slides below has since replaced them).
 
 | Feature set | Version | Tiles | Per slide: median (min to max) | Extraction |
 |---|---|---|---|---|
@@ -555,6 +556,63 @@ Karolinska score used UNI and its own split. Ours trains on 759 to 787 pilot
 Radboud slides per fold, with UNI2-h. Every score here is one seed on a fifth
 of the training set.
 
+### Stage 9 — all slides
+
+Measured 2026-10-22 on the desktop (RTX 4060), from
+`notebooks/09_pilot_study.ipynb` run with `ALL_SLIDES = True` at commit
+`7370937`. Manifests rewritten at `b778b50` (same code, plus a fix to how the
+manifest marks its commit dirty) and committed in `ed5443b`. The run reused the
+pilot's 2,000 files per set and extracted the other 8,616.
+
+| Feature set | Version | Tiles | Per slide: median (min to max) | Extraction, 8,616 slides |
+|---|---|---|---|---|
+| Tissue | `uni2h-L1-224-t144-hsv-v1` | 691,236 | 66 (0 to 144) | 2 h 39 min (1.11 s per slide) |
+| Grid | `uni2h-L1-224-g144-grid-v1` | 1,390,497 | 140 (2 to 144) | 5 h 08 min (2.15 s per slide) |
+
+Times are from the files' write times. Training and scoring took under an hour
+after that. No slide failed. On disk the tissue set is 2.1 GB and the grid set
+4.1 GB. Checking both sets one after the other, without the encoder loaded,
+peaked at 5.1 GB of RAM.
+
+**Every slide in the fold table has a tissue feature file.** One has zero
+tiles: `3790f55cad63053e956fb73027179707`, the slide Stage 2 measured as
+100.0% blank. It is the only one. It is left out of scoring, so 10,615 slides
+are scored.
+
+**Tissue beats the grid with ABMIL under both protocols, again.** Same heads,
+settings and folds as the pilot:
+
+| Head | Protocol | Scored on | Slides | Tissue | Grid | Tissue − grid [95%] |
+|---|---|---|---|---|---|---|
+| Mean pool + logistic regression | mixed | all | 10,615 | 0.792 | 0.754 | +0.038 [0.026, 0.049] |
+| | mixed | Karolinska | 5,455 | 0.730 | 0.669 | +0.061 [0.040, 0.081] |
+| | mixed | Radboud | 5,160 | 0.789 | 0.749 | +0.040 [0.024, 0.057] |
+| | Radboud → Karolinska | Karolinska | 5,455 | 0.140 | 0.429 | −0.289 [−0.315, −0.264] |
+| Gated ABMIL | mixed | all | 10,615 | 0.864 | 0.806 | +0.058 [0.048, 0.067] |
+| | mixed | Karolinska | 5,455 | 0.881 | 0.731 | +0.149 [0.131, 0.168] |
+| | mixed | Radboud | 5,160 | 0.824 | 0.814 | +0.010 [−0.004, 0.023] |
+| | Radboud → Karolinska | Karolinska | 5,455 | 0.596 | 0.449 | +0.147 [0.119, 0.176] |
+
+As in the pilot, ABMIL's gain is on Karolinska; on Radboud the two sets tie.
+
+**Mean pooling on tissue collapses across sites.** From Radboud to Karolinska
+it scores 0.140 on the tissue set against 0.429 on the grid set, an interval
+well below zero. In the pilot the two tied at about 0.43. ABMIL on the same
+tissue features scores 0.596. The cause is not known.
+
+**More training data raised the mixed scores and lowered the cross-site
+ones.** Tissue set, pilot against all slides:
+
+| Head | Mixed | Radboud → Karolinska |
+|---|---|---|
+| Mean pool | 0.750 → 0.792 | 0.423 → 0.140 |
+| ABMIL | 0.824 → 0.864 | 0.689 → 0.596 |
+
+The cross-site models trained on 4,127 to 4,129 Radboud slides per fold here,
+against 759 to 787 in the pilot. With the epoch count fixed at 20, they also
+took about five times as many training steps. Which of these, if either, drives
+the drop has not been checked. One seed; nothing tuned.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -596,10 +654,13 @@ of the training set.
 
 **Stage 9 — pilot**
 
-- How much do the pilot scores move with another seed? Each number above is
-  one run.
-- Why does mean pooling collapse from Radboud to Karolinska (about 0.43) while
-  ABMIL keeps 0.689 on the same features?
+- How much do the scores move with another seed? Each number above is one run.
+- Why does mean pooling on the tissue set fall to 0.140 from Radboud to
+  Karolinska on all slides, below the grid set's 0.429, while ABMIL on the same
+  features scores 0.596?
+- Why did the cross-site scores drop from the pilot to all slides (ABMIL 0.689
+  to 0.596) while the mixed scores rose? Is it the larger Radboud training set,
+  or the five times as many training steps at a fixed 20 epochs?
 - How much of tissue's cross-site gain is the blank-glass difference between
   the hospitals rather than better tiles?
 
