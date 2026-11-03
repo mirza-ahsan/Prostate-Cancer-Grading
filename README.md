@@ -35,7 +35,8 @@ submitted. Rebuilding that half correctly is what this repository does.
 | 7. Encoder (UNI2-h, offline) | `07_encoder` | done |
 | 8. Code into modules | `src/` | done |
 | 9. Pilot and reproduction test | `09_pilot_study`, `tests/test_reproduction.py` | done |
-| 10–12. Extraction, packing, first submission | — | tissue features extracted in notebook 9; packing and submission planned |
+| 10. Full extraction | `09_pilot_study` (run on all slides) | done — tissue features for all 10,616 slides |
+| 11–12. Packing, first submission | — | planned |
 
 The full plan, and the reasoning behind every stage, is in the
 [handbook](docs/01-preprocessing_and_feature_extraction_handbook.md).
