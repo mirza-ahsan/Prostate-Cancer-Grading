@@ -8,13 +8,15 @@
    scoring code may read, never tiling.
 4. DERIVED_DIR is where the project writes its own files. On Kaggle it is
    /kaggle/working/derived/, because /kaggle/input is read-only.
-5. find_input(name) locates a file made by an earlier notebook: in local_dir
+5. FEATURES_DIR holds the feature sets, one folder per version string, next to
+   derived/: data/features/ locally, /kaggle/working/features/ on Kaggle.
+6. find_input(name) locates a file made by an earlier notebook: in local_dir
    first (DERIVED_DIR unless told otherwise), then on Kaggle in any attached
    dataset, at the top level or inside a derived/ or data/ folder. It prints
    where it found the file. If the file is nowhere, it stops with a clear
    error, or returns None when required=False.
-6. slide_path(slide_id) is the full path of a slide's .tiff.
-7. weights_path() is the UNI2-h weights file: data/weights/uni2h.pt locally,
+7. slide_path(slide_id) is the full path of a slide's .tiff.
+8. weights_path() is the UNI2-h weights file: data/weights/uni2h.pt locally,
    the attached private dataset on Kaggle. It is a function rather than a
    constant so that importing this module never fails on a Kaggle notebook
    that has no weights attached.
@@ -28,9 +30,11 @@ ON_KAGGLE = os.path.exists("/kaggle/input")
 if ON_KAGGLE:
     DATA_DIR = "/kaggle/input/prostate-cancer-grade-assessment/"
     DERIVED_DIR = "/kaggle/working/derived/"
+    FEATURES_DIR = "/kaggle/working/features/"
 else:
     DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data/")
     DERIVED_DIR = os.path.join(DATA_DIR, "derived/")
+    FEATURES_DIR = os.path.join(DATA_DIR, "features/")
 
 IMAGE_DIR = os.path.join(DATA_DIR, "train_images/")
 MASK_DIR = os.path.join(DATA_DIR, "train_label_masks/")
