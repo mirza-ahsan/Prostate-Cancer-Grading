@@ -181,9 +181,9 @@ Two local machines. Check `nvidia-smi` first on either.
   ABMIL: 0.864 against 0.806 mixed, 0.596 against 0.449 Radboud→Karolinska.
   Mean pooling on tissue falls to 0.140 cross-site, below the grid; cross-site
   scores dropped from the pilot while mixed rose. Both unexplained.
-- Reproduction test: `tests/test_reproduction.py`, run with
-  `PYTHONPATH=. .venv/bin/python tests/test_reproduction.py` (about 19 s; a
-  plain script, pytest-compatible, pytest not installed). It checks the
+- Reproduction test: `tests/test_reproduction.py`, run with `.venv/bin/pytest`
+  from the repo root (about 19 s; `-s` shows each slide), or as a plain script
+  with `PYTHONPATH=. .venv/bin/python tests/test_reproduction.py`. It checks the
   manifest matches the code and weights now, then re-tiles and re-encodes five
   fixed slides from the `.tiff`: coords and tissue fractions must match
   exactly, features exactly on the same GPU. Passes on the RTX 4060
@@ -231,6 +231,9 @@ Two people, sitting together, one stage at a time.
 ## Tooling
 
 - Lint with ruff (line length 120, config in `pyproject.toml`).
+- Test with pytest (dev group; `[tool.pytest.ini_options]` in `pyproject.toml`
+  sets `testpaths` and `pythonpath`, so `.venv/bin/pytest` needs no
+  `PYTHONPATH`). A deprecation warning from anyio's pytest plugin is harmless.
 - VS Code uses the Pyrefly language server, not Pylance. `[tool.pyrefly]
   search-path = ["."]` makes `from src...` imports resolve.
 - `uv run --with <tool>` has hung on this machine; use a tool already
