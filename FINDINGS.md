@@ -649,12 +649,31 @@ made it fail:
 the numbers needed to set `CROSS_GPU_MIN_COSINE` and fails until it is set.
 See the Stage 7 open question.
 
+### Stage 10 — full extraction
+
+Done for the tissue set `uni2h-L1-224-t144-hsv-v1` by notebook 9's run on all
+slides (see Stage 9 — all slides): a feature file for every one of the 10,616
+slides in the fold table, written one file per slide with a skip-if-exists
+check. It ran on one machine, so no stride split was needed. Tiling and
+encoding ran in sequence, without the worker-process overlap the handbook
+suggests; that only matters for speed if the set is extracted again.
+
+**The one zero-tile slide is empty.** `3790f55cad63053e956fb73027179707`
+(Karolinska, ISUP 0) was checked by eye on 2026-11-03 and shows no tissue. Read
+back pixel by pixel, every level is pure white: every pixel at levels 0, 1 and
+2 is exactly 255 in all three colour channels, and levels 1 and 2 are fully
+opaque, with no missing image data. Real scans of glass are never this uniform,
+so the file looks blanked or failed rather than scanned. Either way it holds no
+tissue, which answers the Stage 2 and Stage 5 questions about it.
+
+It has no features, so training leaves it out. A test slide like it would reach
+the model with no tiles at all; the submission (Stage 12) needs a rule for that
+case.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
 
-- Is `3790f55cad63053e956fb73027179707` empty, or does it hold tissue too small
-  to see at thumbnail scale?
 - Why do only Radboud slides lack label masks?
 - Does the grade skew among pen slides actually leak into a trained model, or
   is it too small to matter?
@@ -671,8 +690,6 @@ See the Stage 7 open question.
 - The threshold sweep was still improving at a cut of 10 and was not tested
   below it, so the floor is unknown. Does `MIN_COMPONENT_AREA = 40` still suit a
   cut of 15, given the two were tuned against each other at 30?
-- Is `3790f55cad63053e956fb73027179707` an empty scan, or tissue too small to
-  clear the component floor?
 
 **Stage 6 — tile placement**
 
