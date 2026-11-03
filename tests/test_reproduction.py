@@ -9,12 +9,16 @@ Two different bugs show up two different ways (handbook Stage 9):
   second copy of the pixel transform.
 
 Run it from the repo root, after any change to tiling, tile count, level,
-encoder or preprocessing:
+encoder or preprocessing, with pytest (add -s to see each slide's line):
+
+    .venv/bin/pytest
+
+or as a plain script:
 
     PYTHONPATH=. .venv/bin/python tests/test_reproduction.py
 
-It takes about a minute, most of it loading the encoder. It exits non-zero on
-failure. It is also a pytest test, should pytest be added.
+It takes about 20 seconds, most of it loading the encoder, and fails (non-zero
+exit) if anything does not reproduce.
 
 Steps
 -----
