@@ -55,11 +55,10 @@ import torch
 
 from src import tiling
 from src.encode import DEVICE, encode_tiles, load_encoder_offline, prepare
-from src.paths import DERIVED_DIR, slide_path, weights_path
+from src.paths import FEATURES_DIR, slide_path, weights_path
 from src.tiling import get_tiles
 
 VERSION = "uni2h-L1-224-t144-hsv-v1"
-FEATURES_DIR = os.path.join(os.path.dirname(os.path.normpath(DERIVED_DIR)), "features")  # as in notebook 9
 SLIDES = {
     "1836f6539ccc9e37d426603cc4526f8b": "Radboud, at the 144-tile cap",
     "4726ffb66a6516baff6de98df2b5a26b": "Karolinska, at the cap, two kept tiles tied at the cut-off",
