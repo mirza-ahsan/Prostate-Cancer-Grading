@@ -613,6 +613,42 @@ against 759 to 787 in the pilot. With the epoch count fixed at 20, they also
 took about five times as many training steps. Which of these, if either, drives
 the drop has not been checked. One seed; nothing tuned.
 
+### Stage 9 — reproduction test
+
+Measured 2026-11-03 on the desktop (RTX 4060), with `tests/test_reproduction.py`
+against the tissue set `uni2h-L1-224-t144-hsv-v1` (manifest at `b778b50`).
+
+**Inference reproduces the stored features exactly on the same GPU.** Five
+slides, tiled and encoded again from the `.tiff` with the offline encoder:
+coordinates, tissue fractions and fp16 features all identical to the stored
+files, bit for bit. The run takes about 19 seconds. The slides, chosen by rule:
+
+| Slide | Why |
+|---|---|
+| `1836f6539ccc9e37d426603cc4526f8b` | Radboud, at the 144-tile cap |
+| `4726ffb66a6516baff6de98df2b5a26b` | Karolinska, at the cap, two kept tiles tied at the cut-off |
+| `0240270d611683829ea5bee2a8c52eb0` | Radboud, median tile count (59) |
+| `03b113d63b06f6740d82b4cfa1ee4a75` | Karolinska, median tile count (70) |
+| `3790f55cad63053e956fb73027179707` | the blank slide, zero tiles |
+
+Ties at the cap's cut-off are rare: no cap slide (70 of them, 66 Karolinska)
+kept only full-tissue tiles, and the most kept tiles tied at the cut-off
+fraction on any of them is two.
+
+**The test catches what it is for.** Each fault below was put in on purpose and
+made it fail:
+
+| Fault | Reported |
+|---|---|
+| a tiling setting changed (saturation cut 15 to 16) without a new version | the manifest no longer matches the code |
+| tile order reversed | coordinates and tissue fractions differ |
+| tiles mirrored before encoding, standing in for a second pixel path | features differ, largest difference 0.949 |
+| features stored on another GPU | prints the largest difference and lowest cosine, and fails: tolerance not set |
+
+**The cross-GPU tolerance is still unset.** On another GPU the test reports
+the numbers needed to set `CROSS_GPU_MIN_COSINE` and fails until it is set.
+See the Stage 7 open question.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -650,7 +686,8 @@ the drop has not been checked. One seed; nothing tuned.
 
 - How large is the per-feature difference between GPUs, and is it the same
   between our machines and Kaggle's? Stage 9's reproduction test needs this to
-  set its tolerance.
+  set its tolerance. Running `tests/test_reproduction.py` on the laptop and on
+  Kaggle prints it.
 
 **Stage 9 — pilot**
 
