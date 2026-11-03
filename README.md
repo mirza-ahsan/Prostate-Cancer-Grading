@@ -34,7 +34,7 @@ submitted. Rebuilding that half correctly is what this repository does.
 | 6. Tile placement | `06_tile_placement` | done |
 | 7. Encoder (UNI2-h, offline) | `07_encoder` | done |
 | 8. Code into modules | `src/` | done |
-| 9. Pilot and reproduction test | `09_pilot_study` | in progress |
+| 9. Pilot and reproduction test | `09_pilot_study`, `tests/test_reproduction.py` | done |
 | 10–12. Extraction, packing, first submission | — | tissue features extracted in notebook 9; packing and submission planned |
 
 The full plan, and the reasoning behind every stage, is in the
@@ -115,6 +115,15 @@ Everything else stays in the notebooks.
 
 `tiling.py` must never import anything that can reach a label, a mask or a CSV.
 Notebook 6 checks its imports every time it runs.
+
+`tests/test_reproduction.py` tiles and encodes five slides again from the
+`.tiff` and checks the result against the stored tissue features: coordinates
+exactly, and features exactly on the GPU that stored them. Run it after any
+change to tiling or encoding (about 20 seconds):
+
+```
+PYTHONPATH=. .venv/bin/python tests/test_reproduction.py
+```
 
 ---
 
