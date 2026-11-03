@@ -109,7 +109,7 @@ Everything else stays in the notebooks.
 
 | Module | What it holds |
 |---|---|
-| `paths.py` | where the data, derived files and weights are, locally and on Kaggle |
+| `paths.py` | where the data, derived files, feature sets and weights are, locally and on Kaggle |
 | `tiling.py` | `get_tiles`: slide file in, tiles out, plus its settings. Imports image libraries only |
 | `encode.py` | UNI2-h loading, online and offline, and `encode_tiles`, the one place the pixel transform lives |
 | `display.py` | `show_positions` and `show_tiles`, the two pictures for checking tiling by eye |
