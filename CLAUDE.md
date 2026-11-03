@@ -38,9 +38,10 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
 
 ## Current state
 
-- Stages 1 to 8 are done, with findings and artifacts recorded.
-- Stage in progress: **Stage 9 — pilot, then prove it reproduces.** See
-  "Stage 9 so far" below.
+- Stages 1 to 9 are done, with findings and artifacts recorded. See "Stage 9
+  so far" below.
+- Stage 10's extraction is done for the tissue set (all slides, in notebook
+  9). Next in the handbook: Stage 11, pack and verify.
 - Settled code lives in `src/`. Notebooks 5 onward import from it. Notebooks 1
   to 4 are finished and keep their own path cells; leave them alone.
 - There is no notebook 08: Stage 8 was moving code into `src/`.
@@ -180,9 +181,15 @@ Two local machines. Check `nvidia-smi` first on either.
   ABMIL: 0.864 against 0.806 mixed, 0.596 against 0.449 Radboud→Karolinska.
   Mean pooling on tissue falls to 0.140 cross-site, below the grid; cross-site
   scores dropped from the pilot while mixed rose. Both unexplained.
-- Still to do: the saved reproduction test on five slides (re-tile and
-  re-encode from the `.tiff`, compare coords exactly and features within a
-  tolerance when the GPU differs).
+- Reproduction test: `tests/test_reproduction.py`, run with
+  `PYTHONPATH=. .venv/bin/python tests/test_reproduction.py` (about 19 s; a
+  plain script, pytest-compatible, pytest not installed). It checks the
+  manifest matches the code and weights now, then re-tiles and re-encodes five
+  fixed slides from the `.tiff`: coords and tissue fractions must match
+  exactly, features exactly on the same GPU. Passes on the RTX 4060
+  (2026-11-03). On another GPU it prints the difference and fails until
+  `CROSS_GPU_MIN_COSINE` is set from measurements. Re-run it after any change
+  to tiling, tile count, level, encoder or preprocessing.
 
 ## How we work
 
