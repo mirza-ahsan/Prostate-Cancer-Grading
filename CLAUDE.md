@@ -38,10 +38,11 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
 
 ## Current state
 
-- Stages 1 to 9 are done, with findings and artifacts recorded. See "Stage 9
-  so far" below.
-- Stage 10's extraction is done for the tissue set (all slides, in notebook
-  9). Next in the handbook: Stage 11, pack and verify.
+- Stages 1 to 10 are done, with findings and artifacts recorded. See "Stage 9
+  so far" below. Stage 10's extraction was notebook 9's run on all slides; its
+  one zero-tile slide, `3790f55c...`, is an empty, all-white file (FINDINGS,
+  Stage 10), and the submission will need a rule for a slide with no tiles.
+- Next in the handbook: Stage 11, pack and verify.
 - Settled code lives in `src/`. Notebooks 5 onward import from it. Notebooks 1
   to 4 are finished and keep their own path cells; leave them alone.
 - There is no notebook 08: Stage 8 was moving code into `src/`.
