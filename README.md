@@ -119,10 +119,10 @@ Notebook 6 checks its imports every time it runs.
 `tests/test_reproduction.py` tiles and encodes five slides again from the
 `.tiff` and checks the result against the stored tissue features: coordinates
 exactly, and features exactly on the GPU that stored them. Run it after any
-change to tiling or encoding (about 20 seconds):
+change to tiling or encoding (about 20 seconds), from the repo root:
 
 ```
-PYTHONPATH=. .venv/bin/python tests/test_reproduction.py
+.venv/bin/pytest
 ```
 
 ---
