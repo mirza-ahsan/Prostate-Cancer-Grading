@@ -99,8 +99,11 @@ Two local machines. Check `nvidia-smi` first on either.
 
 ## The code in `src/`
 
-- `paths.py`: `ON_KAGGLE`, `DATA_DIR`, `DERIVED_DIR`, `IMAGE_DIR`, `MASK_DIR`,
-  `find_input`, `slide_path(slide_id)`, `weights_path()`.
+- `paths.py`: `ON_KAGGLE`, `DATA_DIR`, `DERIVED_DIR`, `FEATURES_DIR`,
+  `IMAGE_DIR`, `MASK_DIR`, `find_input`, `slide_path(slide_id)`,
+  `weights_path()`. `FEATURES_DIR` is `data/features/` locally and
+  `/kaggle/working/features/` on Kaggle. Notebook 9, finished, still computes
+  the same folder in its own cell.
 - `tiling.py`: `get_tiles(slide_path)` returns `(tiles, coords, tissue_frac)`:
   a list of 224×224 PIL RGB tiles, int32 level-0 (x, y) coords, float32
   fractions. It imports only cv2, numpy, openslide and PIL; notebook 6 asserts
