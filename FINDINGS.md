@@ -674,8 +674,9 @@ case.
 
 Measured 2026-11-13 on the desktop (RTX 4060 PC, 14 GB RAM, NVMe disk), with
 `notebooks/11_pack_and_verify.ipynb` and `src/features.py`, on the tissue set
-`uni2h-L1-224-t144-hsv-v1`. The commit that packed it is the manifest's
-`packed.code_commit`; the extraction's own `code_commit` (`b778b50`) is kept.
+`uni2h-L1-224-t144-hsv-v1`, packed at commit `b77b3d2` (the manifest's
+`packed.code_commit`); the extraction's own `code_commit` (`b778b50`) is kept.
+Packing twice gave the same `features.npy`, byte for byte.
 
 **The tissue set is complete and packed.** All 10,616 expected slides have a
 per-slide file and nothing else is in the folder. 10,615 slides are packed,
@@ -691,7 +692,7 @@ and is left out by name with its reason (Stage 10), in the notebook's
 | `tiles.parquet` | one row per tile: `slide_id`, `tile`, level-0 `x`, `y`, `tissue_frac` | 2.5 MB |
 
 `features.npy` sha256 `14386ff532415f186d9ce7f7ac8a7cb66dfdffa351e38ec0063d9a5e4bdc41dd`.
-Counting took 6 s and packing 9 s, with the per-slide files already in memory
+Counting took 2 to 6 s and packing 9 s, with the per-slide files already in memory
 from an earlier read.
 
 **Verification passes, all nine checks.** Slides (10,615 packed + 1 excluded =
@@ -723,10 +724,11 @@ read once (the 10,615 packed slides), in one shuffled order, on this PC:
 
 | Source | From disk (page cache dropped) | From memory |
 |---|---|---|
-| 10,615 `.pt` files | 6.7 s (0.63 ms per slide) | 1.9 s |
-| packed, memory-mapped | 1.5 s (0.14 ms per slide) | 0.1 s |
+| 10,615 `.pt` files | 6.1 s (0.58 ms per slide) | 1.9 s |
+| packed, memory-mapped | 1.0 s (0.10 ms per slide) | 0.1 s |
 
-About 4 times faster from disk and 19 times from memory. On this NVMe disk
+About 6 times faster from disk and 19 times from memory (a first run gave
+6.7 s against 1.5 s from disk). On this NVMe disk
 either way costs seconds per epoch; on a slower disk, such as Kaggle's, the
 gap will be different and has not been measured.
 
