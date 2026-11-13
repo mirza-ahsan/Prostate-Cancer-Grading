@@ -38,11 +38,17 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
 
 ## Current state
 
-- Stages 1 to 10 are done, with findings and artifacts recorded. See "Stage 9
+- Stages 1 to 11 are done, with findings and artifacts recorded. See "Stage 9
   so far" below. Stage 10's extraction was notebook 9's run on all slides; its
   one zero-tile slide, `3790f55c...`, is an empty, all-white file (FINDINGS,
   Stage 10), and the submission will need a rule for a slide with no tiles.
-- Next in the handbook: Stage 11, pack and verify.
+- Stage 11: `notebooks/11_pack_and_verify.ipynb` packed the tissue set with
+  `src/features.py` (10,615 slides, 691,236 tiles; the empty slide excluded by
+  name in the notebook's `EXCLUDED` and in the manifest). Train from the packed
+  set through `open_packed`; `tests/test_feature_set.py` re-runs the
+  verification. The per-slide files stay: the reproduction test and the
+  verification's round trip read them.
+- Next in the handbook: Stage 12, a first real submission.
 - Settled code lives in `src/`. Notebooks 5 onward import from it. Notebooks 1
   to 4 are finished and keep their own path cells; leave them alone.
 - There is no notebook 08: Stage 8 was moving code into `src/`.
@@ -116,6 +122,19 @@ Two local machines. Check `nvidia-smi` first on either.
   `encode_tiles(encoder, tiles)` returns a float16 CPU tensor `[n, 1536]`. The
   pixel transform (scale to 0–1, ImageNet mean/std) lives only inside
   `encode_tiles`. There is no resize; a wrong-size tile raises.
+- `features.py`: one feature set on disk. File names (`SLIDES_SUBDIR`,
+  `FEATURES_FILE`, `INDEX_FILE`, `TILES_FILE`, `MANIFEST_FILE`) live only here.
+  `check_complete`, `read_slide` (the one reader of a per-slide `.pt`),
+  `count_tiles`, `pack(version, expected_ids, excluded, ...)` (writes
+  `features.npy` fp16 [tiles, 1536], `index.parquet` with `start`/`end`/`n_tiles`
+  per slide, `tiles.parquet` with level-0 `x`, `y` and `tissue_frac` per tile,
+  and a `packed` section in the manifest; all under `.part` names, renamed when
+  complete), `open_packed` (returns `features` memory-mapped read-only, `index`,
+  `starts`, `ends`, `tiles`, `manifest`; slide i is
+  `features[starts[i]:ends[i]]`; no global state, so safe per DataLoader
+  worker) and `verify` (nine checks; raises `VerificationError` with `.failed`).
+  Also `file_sha256` and `code_commit`, shared with the tests. Every function
+  takes `features_dir`, default `FEATURES_DIR`.
 - `display.py`: `show_positions` and `show_tiles`, the two pictures for
   checking tiling by eye.
 
@@ -237,7 +256,9 @@ Two people, sitting together, one stage at a time.
 - Lint with ruff (line length 120, config in `pyproject.toml`).
 - Test with pytest (dev group; `[tool.pytest.ini_options]` in `pyproject.toml`
   sets `testpaths` and `pythonpath`, so `.venv/bin/pytest` needs no
-  `PYTHONPATH`). A deprecation warning from anyio's pytest plugin is harmless.
+  `PYTHONPATH`). It runs `tests/test_reproduction.py` and
+  `tests/test_feature_set.py`, about 25 s together. A deprecation warning from
+  anyio's pytest plugin is harmless.
 - VS Code uses the Pyrefly language server, not Pylance. `[tool.pyrefly]
   search-path = ["."]` makes `from src...` imports resolve.
 - `uv run --with <tool>` has hung on this machine; use a tool already
