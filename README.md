@@ -36,7 +36,8 @@ submitted. Rebuilding that half correctly is what this repository does.
 | 8. Code into modules | `src/` | done |
 | 9. Pilot and reproduction test | `09_pilot_study`, `tests/test_reproduction.py` | done |
 | 10. Full extraction | `09_pilot_study` (run on all slides) | done — tissue features for all 10,616 slides |
-| 11–12. Packing, first submission | — | planned |
+| 11. Pack and verify | `11_pack_and_verify`, `src/features.py`, `tests/test_feature_set.py` | done — tissue set packed and verified |
+| 12. First submission | — | planned |
 
 The full plan, and the reasoning behind every stage, is in the
 [handbook](docs/01-preprocessing_and_feature_extraction_handbook.md).
@@ -89,6 +90,7 @@ exactly.
 | `06_tile_placement` | Which squares does the encoder see? | inventory, colour stats, masks (scoring only) | nothing: it checks `src/tiling.py` | ~1 min |
 | `07_encoder` | Can tiles become features, offline too? | inventory, UNI2-h | `data/weights/uni2h.pt`, once | ~1 min |
 | `09_pilot_study` | Does tissue placement beat a blind grid? | inventory, UNI2-h, `folds.csv` (training only) | `data/features/<version>/`: per-slide `.pt` and `manifest.json`, for a tissue set and a grid set | all slides: ~8 h first run, then under 1 h |
+| `11_pack_and_verify` | Is the feature set complete, self-describing and fast to read? | the tissue set's per-slide `.pt` files and manifest, `folds.csv` (slide IDs only) | `data/features/<version>/`: `features.npy`, `index.parquet`, `tiles.parquet`, and a `packed` section in `manifest.json` | under 1 min |
 
 **On Kaggle** the notebooks detect the environment themselves. Competition data
 is read from `/kaggle/input/prostate-cancer-grade-assessment/`, and outputs go
@@ -112,6 +114,7 @@ Everything else stays in the notebooks.
 | `paths.py` | where the data, derived files, feature sets and weights are, locally and on Kaggle |
 | `tiling.py` | `get_tiles`: slide file in, tiles out, plus its settings. Imports image libraries only |
 | `encode.py` | UNI2-h loading, online and offline, and `encode_tiles`, the one place the pixel transform lives |
+| `features.py` | packing a feature set into one memory-mapped array plus index and tile table, opening it, and verifying it |
 | `display.py` | `show_positions` and `show_tiles`, the two pictures for checking tiling by eye |
 
 `tiling.py` must never import anything that can reach a label, a mask or a CSV.
@@ -125,6 +128,11 @@ change to tiling or encoding (about 20 seconds), from the repo root:
 ```
 .venv/bin/pytest
 ```
+
+`tests/test_feature_set.py`, run by the same command, verifies the packed
+tissue set: every expected slide present or listed as excluded, contiguous
+index ranges, no non-finite values, `masks_used: false`, the array's
+fingerprint, and every slide's packed rows equal to its per-slide file.
 
 ---
 
