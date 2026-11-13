@@ -46,7 +46,6 @@ the RTX 4060):
 - the one slide with zero tiles, which must stay empty.
 """
 
-import hashlib
 import json
 import os
 
@@ -55,6 +54,7 @@ import torch
 
 from src import tiling
 from src.encode import DEVICE, encode_tiles, load_encoder_offline, prepare
+from src.features import file_sha256
 from src.paths import FEATURES_DIR, slide_path, weights_path
 from src.tiling import get_tiles
 
@@ -67,14 +67,6 @@ SLIDES = {
     "3790f55cad63053e956fb73027179707": "the blank slide, zero tiles",
 }
 CROSS_GPU_MIN_COSINE = None
-
-
-def file_sha256(path):
-    digest = hashlib.sha256()
-    with open(path, "rb") as f:
-        for block in iter(lambda: f.read(1 << 24), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def check_manifest():
