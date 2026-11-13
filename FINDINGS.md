@@ -670,6 +670,66 @@ It has no features, so training leaves it out. A test slide like it would reach
 the model with no tiles at all; the submission (Stage 12) needs a rule for that
 case.
 
+### Stage 11 — pack and verify
+
+Measured 2026-11-13 on the desktop (RTX 4060 PC, 14 GB RAM, NVMe disk), with
+`notebooks/11_pack_and_verify.ipynb` and `src/features.py`, on the tissue set
+`uni2h-L1-224-t144-hsv-v1`. The commit that packed it is the manifest's
+`packed.code_commit`; the extraction's own `code_commit` (`b778b50`) is kept.
+
+**The tissue set is complete and packed.** All 10,616 expected slides have a
+per-slide file and nothing else is in the folder. 10,615 slides are packed,
+691,236 tiles, 66 per slide at the median (4 to 144; 70 slides at the cap).
+The one zero-tile slide, `3790f55cad63053e956fb73027179707`, is the only one,
+and is left out by name with its reason (Stage 10), in the notebook's
+`EXCLUDED` and in the manifest's `packed.excluded_slides`.
+
+| File | Contents | Size |
+|---|---|---|
+| `features.npy` | fp16 [691,236, 1536] | 2,123.5 MB |
+| `index.parquet` | one row per slide: `slide_id`, `start`, `end`, `n_tiles` | 0.5 MB |
+| `tiles.parquet` | one row per tile: `slide_id`, `tile`, level-0 `x`, `y`, `tissue_frac` | 2.5 MB |
+
+`features.npy` sha256 `14386ff532415f186d9ce7f7ac8a7cb66dfdffa351e38ec0063d9a5e4bdc41dd`.
+Counting took 6 s and packing 9 s, with the per-slide files already in memory
+from an earlier read.
+
+**Verification passes, all nine checks.** Slides (10,615 packed + 1 excluded =
+10,616 expected), no empty slides, contiguous ranges, array shape and dtype,
+tile table, all 1,061,738,496 values finite, manifest (`masks_used: false`,
+counts), fingerprint, and the round trip: every packed slide's rows identical
+to its `.pt` file. It takes 6 s with the files in memory, 12 s from disk
+(`tests/test_feature_set.py`).
+
+**The verification was seen to fail.** On scratch copies of 40 slides
+(including the empty one), each fault below was planted on its own and caught:
+
+| Fault | Must be caught by | Caught by |
+|---|---|---|
+| two slides' `start`/`end` swapped in the index | round trip, tile table | contiguity, tile table, round trip |
+| a gap between two slides' ranges | contiguity | contiguity, tile table, round trip |
+| one slide's index row deleted | slides | slides, contiguity, tile table, manifest |
+| `masks_used` set to true | manifest | manifest |
+| one NaN written into the array | finite, fingerprint | finite, fingerprint, round trip |
+| one value of the array changed | fingerprint, round trip | fingerprint, round trip |
+| two tiles of one slide swapped | round trip | fingerprint, round trip |
+| a `.part` file left in `slides/` | `check_complete` stops | stops: 1 other file in `slides/` |
+| a zero-tile slide not in the exclusions | `pack` stops | stops: zero-tile slide not excluded |
+| an excluded slide that has tiles | `pack` stops | stops: excluded slide has tiles |
+| packing again without `overwrite` | `pack` stops | stops: already packed |
+
+**Reading is faster packed, but both are fast here.** Every slide's features
+read once (the 10,615 packed slides), in one shuffled order, on this PC:
+
+| Source | From disk (page cache dropped) | From memory |
+|---|---|---|
+| 10,615 `.pt` files | 6.7 s (0.63 ms per slide) | 1.9 s |
+| packed, memory-mapped | 1.5 s (0.14 ms per slide) | 0.1 s |
+
+About 4 times faster from disk and 19 times from memory. On this NVMe disk
+either way costs seconds per epoch; on a slower disk, such as Kaggle's, the
+gap will be different and has not been measured.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
