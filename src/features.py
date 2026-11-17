@@ -17,7 +17,8 @@ start + k of features.npy and of tiles.parquet.
 
 Functions
 ---------
-1. set_dir and slide_file: where a set and one slide's file are. Every function
+1. set_dir, slide_file and predictions_file: where a set, one slide's file,
+   and a model's saved predictions on the set are. Every function
    that touches files takes features_dir, FEATURES_DIR by default, so the same
    code runs on a scratch copy and on the real set.
 2. file_sha256 and code_commit: a file's fingerprint and the commit that wrote
@@ -59,6 +60,7 @@ INDEX_FILE = "index.parquet"
 TILES_FILE = "tiles.parquet"
 MANIFEST_FILE = "manifest.json"
 PART_SUFFIX = ".part"
+PREDICTIONS_SUBDIR = "predictions"
 FEATURES_DTYPE = np.float16
 
 Packed = namedtuple("Packed", ["features", "index", "starts", "ends", "tiles", "manifest"])
@@ -86,6 +88,11 @@ def set_dir(version, features_dir=FEATURES_DIR):
 def slide_file(version, slide_id, features_dir=FEATURES_DIR):
     """The path of one slide's .pt file in a feature set."""
     return os.path.join(set_dir(version, features_dir), SLIDES_SUBDIR, f"{slide_id}.pt")
+
+
+def predictions_file(version, name, features_dir=FEATURES_DIR):
+    """Where a model's per-slide predictions on a feature set are saved, as Parquet; name is e.g. "abmil-mixed"."""
+    return os.path.join(set_dir(version, features_dir), PREDICTIONS_SUBDIR, f"{name}.parquet")
 
 
 def file_sha256(path):
