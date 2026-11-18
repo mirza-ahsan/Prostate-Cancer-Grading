@@ -37,6 +37,8 @@ submitted. Rebuilding that half correctly is what this repository does.
 | 9. Pilot and reproduction test | `09_pilot_study`, `tests/test_reproduction.py` | done |
 | 10. Full extraction | `09_pilot_study` (run on all slides) | done — tissue features for all 10,616 slides |
 | 11. Pack and verify | `11_pack_and_verify`, `src/features.py`, `tests/test_feature_set.py` | done — tissue set packed and verified |
+| Baseline from the packed set | `12_baseline`, `src/mil.py` | done — 0.864 mixed; cross-site 0.632 Radboud→Karolinska, 0.780 Karolinska→Radboud (5 seeds) |
+| Stain normalisation (handbook Stage 13 item) | `13_stain_normalisation`, `14_stain_ablation`, `src/stain.py`, `src/extract.py` | done — no method helps in both directions; the baseline goes forward |
 | 12. First submission | — | planned |
 
 The full plan, and the reasoning behind every stage, is in the
@@ -91,6 +93,9 @@ exactly.
 | `07_encoder` | Can tiles become features, offline too? | inventory, UNI2-h | `data/weights/uni2h.pt`, once | ~1 min |
 | `09_pilot_study` | Does tissue placement beat a blind grid? | inventory, UNI2-h, `folds.csv` (training only) | `data/features/<version>/`: per-slide `.pt` and `manifest.json`, for a tissue set and a grid set | all slides: ~8 h first run, then under 1 h |
 | `11_pack_and_verify` | Is the feature set complete, self-describing and fast to read? | the tissue set's per-slide `.pt` files and manifest, `folds.csv` (slide IDs only) | `data/features/<version>/`: `features.npy`, `index.parquet`, `tiles.parquet`, and a `packed` section in `manifest.json` | under 1 min |
+| `12_baseline` | What does our model score from the packed set, and how noisy is the cross-site score? | the packed tissue set, `folds.csv` | `data/features/<version>/predictions/abmil-*.parquet` (not tracked) | ~35 min |
+| `13_stain_normalisation` | Can each stain method map our tiles to one target without damaging them? | 76 slides' tiles, `folds.csv` (to choose Radboud reference slides) | nothing: the targets go into `src/stain.py` | ~6 min |
+| `14_stain_ablation` | Does stain normalisation help our model across hospitals? | every slide, UNI2-h, `folds.csv`, notebook 12's predictions | four feature sets `data/features/uni2h-L1-224-t144-hsv-<method>-v1/` (per-slide, packed, manifest, predictions) | ~14 h |
 
 **On Kaggle** the notebooks detect the environment themselves. Competition data
 is read from `/kaggle/input/prostate-cancer-grade-assessment/`, and outputs go
@@ -115,6 +120,9 @@ Everything else stays in the notebooks.
 | `tiling.py` | `get_tiles`: slide file in, tiles out, plus its settings. Imports image libraries only |
 | `encode.py` | UNI2-h loading, online and offline, and `encode_tiles`, the one place the pixel transform lives |
 | `features.py` | packing a feature set into one memory-mapped array plus index and tile table, opening it, and verifying it |
+| `mil.py` | gated ABMIL, the evaluation protocols (mixed folds; each hospital to the other, five seeds), scores, paired bootstraps, saved predictions |
+| `stain.py` | stain normalisation of a slide's tiles (Reinhard, Macenko, Vahadane, Retinex) and each method's target |
+| `extract.py` | extraction with an optional stain step, CPU workers feeding the GPU, and the set's manifest |
 | `display.py` | `show_positions` and `show_tiles`, the two pictures for checking tiling by eye |
 
 `tiling.py` must never import anything that can reach a label, a mask or a CSV.
