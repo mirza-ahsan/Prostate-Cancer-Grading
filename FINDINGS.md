@@ -732,6 +732,117 @@ About 6 times faster from disk and 19 times from memory (a first run gave
 either way costs seconds per epoch; on a slower disk, such as Kaggle's, the
 gap will be different and has not been measured.
 
+### Baseline from the packed set (notebook 12)
+
+Measured 2026-11-17 on the desktop (RTX 4060), `notebooks/12_baseline.ipynb`
+at commit `4342ff2`, on the packed tissue set `uni2h-L1-224-t144-hsv-v1`
+(10,615 slides). The model is notebook 9's gated ABMIL, moved unchanged into
+`src/mil.py`.
+
+**Stage 9 reproduces exactly from the packed set.** Mixed 0.8643 (Radboud
+0.8240, Karolinska 0.8807) and fold-based Radboud to Karolinska 0.5959, equal to
+Stage 9 to four decimals. So the module is the same model and the packed rows
+feed it the same data.
+
+**Cross-site, now in both directions with five seeds.** Every slide of one
+hospital trains, every slide of the other is tested; no folds are needed,
+because no duplicate group spans both hospitals (0 of 273):
+
+| Direction | Test slides | QWK, mean of 5 seeds | Seed std | Min to max |
+|---|---|---|---|---|
+| Radboud to Karolinska | 5,455 | 0.632 | 0.020 | 0.602 to 0.656 |
+| Karolinska to Radboud | 5,160 | 0.780 | 0.004 | 0.775 to 0.784 |
+
+Radboud to Karolinska rises from 0.596 (four folds of Radboud) to 0.632 (all
+of Radboud) and spans 5 points across seeds: one seed cannot judge a change of a
+few points. Karolinska to Radboud is much higher and steadier.
+
+**The cross-site errors are confusions of the middle grades, not a general
+over-grading.** Share of test slides per predicted grade against the truth:
+Radboud to Karolinska predicts grade 2 for 5.5% (true 12.2%) and grade 3 for
+16.2% (true 5.8%); Karolinska to Radboud predicts grade 4 for 29.6% (true
+14.9%) and grade 3 for 9.6% (true 17.9%). The hospitals' grade distributions
+differ: Karolinska is 69% grades 0 and 1, Radboud roughly flat.
+
+### Stain normalisation: calibration and look (notebook 13)
+
+Measured 2026-11-17, `notebooks/13_stain_normalisation.ipynb` at commit
+`33637a7`, methods in `src/stain.py`. Each method is fitted once per slide on
+the tissue pixels of all its tiles (our saturation and ink rule) and applied to
+every tile. Targets: the median over 30 Radboud slides (seed 0), all fitted;
+Radboud only, so the Karolinska test hospital never shapes the Radboud to
+Karolinska inputs. Values are in `TARGETS` in `src/stain.py`.
+
+**All methods narrow the colour gap between the hospitals.** Mean CIE LAB of
+tissue pixels, 20 slides per hospital not used for calibration:
+
+| Method | Gap between hospitals | Spread within a hospital | Seconds per slide, 1 thread |
+|---|---|---|---|
+| none | 20.6 | 7.9 | |
+| Reinhard, every pixel | 8.3 | 6.3 | 0.23 |
+| Reinhard, tissue only | 0.1 | 0.4 | 0.26 |
+| Macenko | 9.0 | 5.4 | 0.46 |
+| Vahadane | 9.5 | 5.0 | 2.64 |
+| Retinex | 3.7 | 5.1 | 0.96 |
+
+Tissue-only Reinhard's near-zero gap is circular: it sets exactly the measured
+quantity to the target.
+
+**By eye.** Retinex gave the most uniform look with glass untouched; Macenko and
+Vahadane kept tissue intact, Karolinska a little more mauve; standard Reinhard
+mapped glass too, tinting it cyan on Radboud and cream on Karolinska (a new
+hospital difference) and washing out Karolinska tissue, so it was not run;
+tissue-only Reinhard left glass alone, with faint speckle at a few pale tissue
+edges. Vahadane fitted on 5,000 sampled pixels gives the same stain vectors as
+on 20,000 (cosine 1.000), four times faster.
+
+### Stain normalisation ablation (notebook 14)
+
+Measured 2026-11-17 to 18, `notebooks/14_stain_ablation.ipynb`; extraction and
+packing at commit `8df64a2`. One change from the baseline: the stain method
+between `get_tiles` and `encode_tiles`. Everything else identical: tiles,
+UNI2-h fp16, packing (all nine checks passed for every set), gated ABMIL,
+protocols and seeds. Before the run, `src/extract.py` with no stain method
+reproduced the stored tissue features bit for bit on the five
+reproduction-test slides.
+
+| Version | Tiles | Stain not fitted | Extraction |
+|---|---|---|---|
+| `uni2h-L1-224-t144-hsv-reinhard_tissue-v1` | 691,236 | 0 slides | 3.04 h |
+| `uni2h-L1-224-t144-hsv-macenko-v1` | 691,236 | 0 slides | 2.91 h |
+| `uni2h-L1-224-t144-hsv-vahadane-v1` | 691,236 | 0 slides | about 2.9 h |
+| `uni2h-L1-224-t144-hsv-retinex-v1` | 691,236 | 0 slides | 2.90 h |
+
+Six CPU workers tiling and normalising while the GPU encodes: about 1.0 s per
+slide for every method, the GPU being the limit. Training took 23 minutes per
+set (mixed plus ten cross-site models).
+
+**No method helps by the rule fixed in advance** (better than the baseline in
+both cross-site directions, 95% paired bootstrap interval above zero, slides
+resampled and seeds averaged; mixed not worse). Difference from the baseline:
+
+| Method | Mixed (all) | Radboud to Karolinska | Karolinska to Radboud |
+|---|---|---|---|
+| Reinhard, tissue only | -0.003 [-0.009, +0.004] | -0.043 [-0.059, -0.027] | -0.024 [-0.034, -0.014] |
+| Macenko | -0.004 [-0.011, +0.003] | +0.047 [+0.030, +0.063] | -0.009 [-0.017, -0.002] |
+| Vahadane | -0.008 [-0.015, -0.001] | +0.016 [-0.001, +0.032] | -0.007 [-0.014, +0.001] |
+| Retinex | +0.002 [-0.005, +0.008] | -0.022 [-0.038, -0.006] | -0.004 [-0.011, +0.004] |
+
+Baseline: 0.864 mixed, 0.632 Radboud to Karolinska, 0.780 Karolinska to
+Radboud. Mixed hardly moves for any method.
+
+- **Macenko is the only clear cross-site gain**: +0.047 from Radboud to
+  Karolinska (0.679 against 0.632; seed std 0.009 against the baseline's 0.020),
+  but slightly worse the other way (-0.009).
+- **Matching colour is not what helps.** Tissue-only Reinhard and Retinex make
+  the hospitals look most alike (gaps 0.1 and 3.7) and are the two that lose
+  from Radboud to Karolinska; Reinhard loses in both directions.
+- Predicted grades: Retinex and tissue-only Reinhard move Radboud to Karolinska
+  predictions towards grades 2 and 5; Macenko and Vahadane keep the baseline's
+  shape. Karolinska to Radboud's excess of grade 4 (baseline 29.6%, true 14.9%)
+  shrinks only with Retinex (19.4%) and tissue-only Reinhard (23.3%), without a
+  better score.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -770,7 +881,9 @@ gap will be different and has not been measured.
 
 **Stage 9 — pilot**
 
-- How much do the scores move with another seed? Each number above is one run.
+- How much do the scores move with another seed? Partly answered for ABMIL
+  cross-site (notebook 12): standard deviation 0.020 from Radboud to Karolinska
+  and 0.004 the other way, over five seeds. Mixed is still one run.
 - Why does mean pooling on the tissue set fall to 0.140 from Radboud to
   Karolinska on all slides, below the grid set's 0.429, while ABMIL on the same
   features scores 0.596?
@@ -779,6 +892,15 @@ gap will be different and has not been measured.
   or the five times as many training steps at a fixed 20 epochs?
 - How much of tissue's cross-site gain is the blank-glass difference between
   the hospitals rather than better tiles?
+
+**Stain normalisation**
+
+- Why does Macenko help from Radboud to Karolinska (+0.047) but not the other
+  way, while the methods that match colour best (tissue-only Reinhard,
+  Retinex) do worse? The targets come from Radboud, so normalisation moves the
+  Karolinska slides in both directions; one guess is that Macenko changes stain
+  balance without discarding information UNI2-h uses, but it is untested.
+- Would a target from both hospitals, or one per test hospital, change this?
 
 **Later**
 
