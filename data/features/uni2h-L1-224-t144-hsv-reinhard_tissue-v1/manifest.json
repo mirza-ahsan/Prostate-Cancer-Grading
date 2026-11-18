@@ -1,0 +1,95 @@
+{
+  "version": "uni2h-L1-224-t144-hsv-reinhard_tissue-v1",
+  "encoder": "hf-hub:MahmoodLab/UNI2-h",
+  "architecture": "vit_giant_patch14_224",
+  "weights_sha256": "fabfb136dea151098c74610157fceeebff66c537af32d8908a54325b9bc16bff",
+  "feature_dim": 1536,
+  "dtype": "float16",
+  "encoded_on": [
+    "NVIDIA GeForce RTX 4060"
+  ],
+  "tile_size": 224,
+  "read_level": 1,
+  "tile_cap": 144,
+  "placement": {
+    "method": "src.tiling.get_tiles: tissue mask on the smallest level, grid of tile-sized cells, best cells by tissue fraction, then reading order",
+    "saturation_cut": 15,
+    "min_cc_area": 40,
+    "ink_hue": [
+      30,
+      135
+    ],
+    "ink_saturation": 60,
+    "min_tissue_frac": 0.05,
+    "pad_edges": true
+  },
+  "stain": {
+    "method": "reinhard_tissue",
+    "target": {
+      "mean": [
+        175.9338,
+        154.062,
+        123.7651
+      ],
+      "std": [
+        28.9135,
+        8.5007,
+        4.6925
+      ]
+    },
+    "settings": {
+      "io": 240.0,
+      "od_beta": 0.15,
+      "macenko_alpha": 1.0,
+      "max_c_percentile": 99,
+      "vahadane_pixels": 5000,
+      "vahadane_lambda": 0.1,
+      "retinex": {
+        "od_thresh": 0.1,
+        "gamma": 0.6,
+        "sigma": 2.0,
+        "eps": 0.0001,
+        "th": 0.95,
+        "mu": 0.1,
+        "solve_size": 56
+      },
+      "min_tissue_pixels": 2000,
+      "fit_pixels": 200000,
+      "seed": 0
+    },
+    "tissue_pixels": "src.tiling saturation cut and ink rule, per pixel",
+    "not_fitted_slides": []
+  },
+  "masks_used": false,
+  "coordinate_space": "level-0 (x, y) of each tile's top-left corner",
+  "slides": 10616,
+  "tiles": 691236,
+  "zero_tile_slides": [
+    "3790f55cad63053e956fb73027179707"
+  ],
+  "slide_selection": {
+    "source": "data/folds.csv",
+    "method": "every slide"
+  },
+  "torch": "2.13.0+cu126",
+  "timm": "1.0.29",
+  "python": "3.12.14",
+  "created": "2026-11-17T19:12:40+00:00",
+  "code_commit": "8df64a2",
+  "packed": {
+    "slides": 10615,
+    "tiles": 691236,
+    "excluded_slides": {
+      "3790f55cad63053e956fb73027179707": "empty file: every pixel white at every level, zero tiles (FINDINGS, Stage 10)"
+    },
+    "files": {
+      "features": "features.npy",
+      "index": "index.parquet",
+      "tiles": "tiles.parquet"
+    },
+    "row_order": "slides sorted by slide_id; within a slide, the order of its .pt file",
+    "features_sha256": "1e87d05e6e579a49db70d9ab9d9999f716a05364a30f515f7332de6e5d4e6538",
+    "created": "2026-11-18T03:56:48+00:00",
+    "code_commit": "8df64a2"
+  }
+}
