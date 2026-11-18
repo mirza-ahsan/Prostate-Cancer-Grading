@@ -843,6 +843,46 @@ Radboud. Mixed hardly moves for any method.
   shrinks only with Retinex (19.4%) and tissue-only Reinhard (23.3%), without a
   better score.
 
+### Self-attention and tile positions before ABMIL (notebook 15)
+
+Measured 2026-11-18 on the desktop (RTX 4060), `notebooks/15_rope_mil.ipynb`,
+packed tissue set `uni2h-L1-224-t144-hsv-v1`. Model from RoFormer-MIL (Pochet,
+Maroun and Trullo, MICCAI MLMI workshop 2023): one pre-norm transformer layer
+(8 heads, MLP four times wider, dropout 0.25; not tuned) between the tile
+embedding and the ABMIL pooling, with 2D rotary position embedding from each
+tile's grid cell (level-0 coordinate divided by 896 px and rounded; every tile
+within 26 px of its cell) or without it as a control. Training, protocols and
+seeds exactly as the baseline (notebook 12). `TileTransformerABMIL` in
+`src/mil.py`; 4.2 M parameters against ABMIL's 1.05 M.
+
+| Model | Mixed | Radboud to Karolinska (5 seeds) | Karolinska to Radboud (5 seeds) |
+|---|---|---|---|
+| ABMIL (baseline) | 0.864 | 0.632 (0.602 to 0.656) | 0.780 (0.775 to 0.784) |
+| transformer layer + ABMIL | 0.871 | 0.662 (0.644 to 0.685) | 0.751 (0.732 to 0.773) |
+| RoPE transformer layer + ABMIL | 0.874 | 0.719 (0.653 to 0.744) | 0.766 (0.753 to 0.777) |
+
+Differences, 95% paired bootstrap (slides resampled, seeds averaged):
+
+| Comparison | Mixed | Radboud to Karolinska | Karolinska to Radboud |
+|---|---|---|---|
+| transformer - ABMIL | +0.007 [-0.000, +0.014] | +0.030 [+0.015, +0.044] | -0.029 [-0.037, -0.021] |
+| RoPE - ABMIL | +0.010 [+0.002, +0.017] | +0.087 [+0.073, +0.103] | -0.014 [-0.022, -0.006] |
+| RoPE - transformer | +0.003 [-0.004, +0.009] | +0.057 [+0.047, +0.068] | +0.015 [+0.010, +0.021] |
+
+**Tile positions help, given self-attention.** RoPE against the same layer
+without positions (equal parameters) gains in both cross-site directions
+beyond noise. Unlike the paper's own ablation (0.92 against 0.91 on
+TCGA-NSCLC), here positions are most of the gain.
+
+**Self-attention without positions does not help across sites:** +0.030 from
+Radboud to Karolinska, -0.029 the other way.
+
+**Against the baseline, the RoPE model fails the rule in one direction.**
+Mixed +0.010 and Radboud to Karolinska +0.087, the largest cross-site gain
+measured so far (four of five seeds at 0.73 to 0.74, the fifth 0.653), but
+Karolinska to Radboud -0.014. Its four times larger parameter count is not
+controlled against the baseline.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -901,6 +941,13 @@ Radboud. Mixed hardly moves for any method.
   Karolinska slides in both directions; one guess is that Macenko changes stain
   balance without discarding information UNI2-h uses, but it is untested.
 - Would a target from both hospitals, or one per test hospital, change this?
+
+**Heads (notebook 15)**
+
+- How much of the RoPE model's gain over ABMIL is capacity? A plain ABMIL with
+  about 4.2 M parameters (the paper's control) would answer it.
+- Why does any self-attention layer lose from Karolinska to Radboud, where
+  ABMIL is steadiest (seed std 0.004 against 0.010 to 0.018)?
 
 **Later**
 
