@@ -48,7 +48,21 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
   set through `open_packed`; `tests/test_feature_set.py` re-runs the
   verification. The per-slide files stay: the reproduction test and the
   verification's round trip read them.
-- Next in the handbook: Stage 12, a first real submission.
+- Baseline (`notebooks/12_baseline.ipynb`, `src/mil.py`): notebook 9's ABMIL
+  trained from the packed set reproduces Stage 9 exactly (0.8643 mixed, 0.5959
+  fold-based Radboud to Karolinska). Cross-site is now every slide of one
+  hospital to every slide of the other, both directions, seeds 0 to 4: 0.632
+  (std 0.020) Radboud to Karolinska, 0.780 (std 0.004) Karolinska to Radboud.
+  Its predictions are saved next to the tissue set for paired comparisons.
+- Stain normalisation (notebooks 13 and 14, `src/stain.py`, `src/extract.py`):
+  tissue-only Reinhard, Macenko, Vahadane and Retinex, targets from 30 Radboud
+  slides, each a full feature set `uni2h-L1-224-t144-hsv-<method>-v1`. No
+  method beats the baseline in both cross-site directions; Macenko gains 0.047
+  from Radboud to Karolinska but loses 0.009 the other way. Decision
+  (2026-11-18): the baseline, no stain step, goes to Stage 12 (FINDINGS, "Stain
+  normalisation ablation").
+- Next in the handbook: Stage 12, a first real submission, with the baseline
+  pipeline.
 - Settled code lives in `src/`. Notebooks 5 onward import from it. Notebooks 1
   to 4 are finished and keep their own path cells; leave them alone.
 - There is no notebook 08: Stage 8 was moving code into `src/`.
@@ -135,6 +149,25 @@ Two local machines. Check `nvidia-smi` first on either.
   worker) and `verify` (nine checks; raises `VerificationError` with `.failed`).
   Also `file_sha256` and `code_commit`, shared with the tests. Every function
   takes `features_dir`, default `FEATURES_DIR`.
+- `mil.py`: notebook 9's `GatedABMIL` and its fixed settings (`HIDDEN`,
+  `ATTENTION`, `DROPOUT`, `LR`, `WEIGHT_DECAY`, `EPOCHS`), `fit_abmil` (seeded;
+  the model is created after seeding, which keeps runs exact), `predict_abmil`,
+  `load_bags` (packed set into RAM), `cross_validate` on the folds ("mixed",
+  "radboud_to_karolinska_folds"), `cross_site` (every slide of one hospital to
+  the other, one model per seed in `SEEDS`; directions in `CROSS_SITE`), `qwk`,
+  `seed_summary`, `grade_distribution`, `paired_bootstrap(_seeds)`,
+  `score_table`, `save_predictions` (to `predictions_file` in `features.py`).
+- `stain.py`: `normalise_slide(method, tiles)` is the one stain step: fit the
+  slide on its tiles' tissue pixels (our saturation and ink rule), map every
+  tile to `TARGETS[method]`; returns the tiles and whether the fit ran.
+  `METHODS`: reinhard (maps glass too; not used), reinhard_tissue, macenko,
+  vahadane, retinex (ported from Hamza's FRSG code). `calibrate` makes a
+  target. Imports only the tiling constants; never labels or hospital.
+- `extract.py`: `extract_set(version, slide_ids, encoder, method=None)` with
+  `NUM_WORKERS` CPU workers tiling and normalising while the GPU encodes;
+  resumable, atomic writes, failures returned; with no method it reproduces the
+  stored tissue set bit for bit. `write_extraction_manifest` adds a `stain`
+  section. Extraction runs about 1.0 s per slide here, GPU-bound.
 - `display.py`: `show_positions` and `show_tiles`, the two pictures for
   checking tiling by eye.
 
