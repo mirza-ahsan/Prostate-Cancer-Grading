@@ -883,6 +883,33 @@ measured so far (four of five seeds at 0.73 to 0.74, the fifth 0.653), but
 Karolinska to Radboud -0.014. Its four times larger parameter count is not
 controlled against the baseline.
 
+### Capacity control for the RoPE model (notebook 16)
+
+Measured 2026-11-18 on the desktop (RTX 4060), `notebooks/16_capacity_control.ipynb`.
+The baseline's `GatedABMIL` widened to the RoPE model's size (hidden 2046,
+attention 256: 4,205,305 parameters against 4,205,319), the control the
+RoFormer-MIL paper used; same set, recipe, protocols and seeds.
+
+| Model | Mixed | Radboud to Karolinska | Karolinska to Radboud |
+|---|---|---|---|
+| ABMIL, 1.05 M | 0.864 | 0.632 | 0.780 |
+| wide ABMIL, 4.21 M | 0.864 | 0.642 (0.612 to 0.693) | 0.771 (0.770 to 0.775) |
+| RoPE transformer + ABMIL, 4.21 M | 0.874 | 0.719 | 0.766 |
+
+| Comparison | Mixed | Radboud to Karolinska | Karolinska to Radboud |
+|---|---|---|---|
+| wide ABMIL - ABMIL | -0.000 [-0.007, +0.006] | +0.011 [+0.001, +0.021] | -0.009 [-0.013, -0.004] |
+| RoPE - wide ABMIL | +0.010 [+0.003, +0.017] | +0.077 [+0.064, +0.089] | -0.005 [-0.014, +0.003] |
+| transformer - wide ABMIL | +0.007 [-0.000, +0.015] | +0.019 [+0.007, +0.032] | -0.021 [-0.029, -0.012] |
+
+**Capacity is not the explanation.** Four times the parameters in plain ABMIL
+change mixed by nothing and cross-site by about a point either way. At equal
+size the RoPE model gains on mixed and strongly from Radboud to Karolinska and
+ties the other way (interval across zero): better or equal everywhere, though
+it does not meet the strict rule, which asks for a gain in both directions.
+Most of its -0.014 against the small baseline from Karolinska to Radboud comes
+with the size (the wide ABMIL loses 0.009 there too).
+
 ## Open questions
 
 **Stage 2 — looking at the data**
@@ -944,8 +971,8 @@ controlled against the baseline.
 
 **Heads (notebook 15)**
 
-- How much of the RoPE model's gain over ABMIL is capacity? A plain ABMIL with
-  about 4.2 M parameters (the paper's control) would answer it.
+- Answered (notebook 16): the RoPE model's gain over ABMIL is not capacity; a
+  plain ABMIL of the same size gains about a point at most.
 - Why does any self-attention layer lose from Karolinska to Radboud, where
   ABMIL is steadiest (seed std 0.004 against 0.010 to 0.018)?
 
