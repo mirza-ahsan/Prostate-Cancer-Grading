@@ -44,11 +44,14 @@ slides. Tiles go in and come out as 224 x 224 RGB PIL images, as encode_tiles
 takes them.
 """
 
+import warnings
+
 import cv2
 import numpy as np
 from PIL import Image
 from scipy.linalg import solveh_banded
 from sklearn.decomposition import DictionaryLearning
+from sklearn.exceptions import ConvergenceWarning
 
 from src.tiling import INK_HUE_THRESH, INK_SAT_THRESH, SATURATION_CUT
 
@@ -151,11 +154,19 @@ def macenko_vectors(od):
 
 
 def vahadane_vectors(od):
-    """Vahadane stain vectors: sparse non-negative dictionary learning on tissue optical densities [m, 3]."""
+    """Vahadane stain vectors: sparse non-negative dictionary learning on tissue optical densities [m, 3].
+
+    The inner lasso solves stop at their iteration limit and warn that they did
+    not converge. That is expected and silenced here, only for this fit: the
+    vectors agree to cosine 1.000 with a fit on four times the pixels
+    (FINDINGS), and on a full extraction the warning was printed 573,869 times.
+    """
     learner = DictionaryLearning(n_components=2, alpha=VAHADANE_LAMBDA, max_iter=100, fit_algorithm="cd",
                                  transform_algorithm="lasso_cd", positive_code=True, positive_dict=True,
                                  random_state=SEED)
-    learner.fit(sample_rows(od, VAHADANE_PIXELS))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=ConvergenceWarning)
+        learner.fit(sample_rows(od, VAHADANE_PIXELS))
     return order_stains(learner.components_.T.copy())
 
 
