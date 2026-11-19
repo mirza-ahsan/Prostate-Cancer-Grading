@@ -61,8 +61,16 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
   from Radboud to Karolinska but loses 0.009 the other way. Decision
   (2026-11-18): the baseline, no stain step, goes to Stage 12 (FINDINGS, "Stain
   normalisation ablation").
-- Next in the handbook: Stage 12, a first real submission, with the baseline
-  pipeline.
+- Heads and losses (notebooks 15 to 17, `src/mil.py`): a transformer layer
+  with 2D RoPE from tile grid positions before ABMIL (RoFormer-MIL) beats ABMIL;
+  the positions, not the size, are what help (notebook 16: a 4.2 M-parameter
+  ABMIL gains nothing). Ordinal losses beat cross-entropy for both heads in
+  every direction (notebook 17). Best: RoPE model with soft labels, 0.887
+  mixed, 0.750 Radboud to Karolinska, 0.794 Karolinska to Radboud; ABMIL with
+  soft labels 0.886, 0.696, 0.789. Decision (2026-11-19): both heads go
+  forward, both with soft labels; no tuning yet.
+- Next in the handbook: Stage 12, a first real submission, with the tissue
+  pipeline (no stain step) and both heads trained with soft labels.
 - Settled code lives in `src/`. Notebooks 5 onward import from it. Notebooks 1
   to 4 are finished and keep their own path cells; leave them alone.
 - There is no notebook 08: Stage 8 was moving code into `src/`.
@@ -156,7 +164,12 @@ Two local machines. Check `nvidia-smi` first on either.
   "radboud_to_karolinska_folds"), `cross_site` (every slide of one hospital to
   the other, one model per seed in `SEEDS`; directions in `CROSS_SITE`), `qwk`,
   `seed_summary`, `grade_distribution`, `paired_bootstrap(_seeds)`,
-  `score_table`, `save_predictions` (to `predictions_file` in `features.py`).
+  `score_table`, `save_predictions` (to `predictions_file` in `features.py`),
+  `compare_runs`. `TileTransformerABMIL(rope=True)` is the RoPE model;
+  `load_positions` gives tile grid positions (level-0 coordinates / 896).
+  Training functions take `model_fn`, `positions` and `loss` (`LOSSES`:
+  cross_entropy, soft_labels with `SOFT_LABEL_SIGMA` 1.0, corn); defaults
+  reproduce the baseline exactly.
 - `stain.py`: `normalise_slide(method, tiles)` is the one stain step: fit the
   slide on its tiles' tissue pixels (our saturation and ink rule), map every
   tile to `TARGETS[method]`; returns the tiles and whether the fit ran.
