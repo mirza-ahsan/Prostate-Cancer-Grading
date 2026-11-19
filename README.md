@@ -39,6 +39,7 @@ submitted. Rebuilding that half correctly is what this repository does.
 | 11. Pack and verify | `11_pack_and_verify`, `src/features.py`, `tests/test_feature_set.py` | done — tissue set packed and verified |
 | Baseline from the packed set | `12_baseline`, `src/mil.py` | done — 0.864 mixed; cross-site 0.632 Radboud→Karolinska, 0.780 Karolinska→Radboud (5 seeds) |
 | Stain normalisation (handbook Stage 13 item) | `13_stain_normalisation`, `14_stain_ablation`, `src/stain.py`, `src/extract.py` | done — no method helps in both directions; the baseline goes forward |
+| Heads and losses | `15_rope_mil`, `16_capacity_control`, `17_loss_test` | done — RoPE model and ABMIL both go forward with soft labels (best: 0.887 / 0.750 / 0.794) |
 | 12. First submission | — | planned |
 
 The full plan, and the reasoning behind every stage, is in the
@@ -96,6 +97,9 @@ exactly.
 | `12_baseline` | What does our model score from the packed set, and how noisy is the cross-site score? | the packed tissue set, `folds.csv` | `data/features/<version>/predictions/abmil-*.parquet` (not tracked) | ~35 min |
 | `13_stain_normalisation` | Can each stain method map our tiles to one target without damaging them? | 76 slides' tiles, `folds.csv` (to choose Radboud reference slides) | nothing: the targets go into `src/stain.py` | ~6 min |
 | `14_stain_ablation` | Does stain normalisation help our model across hospitals? | every slide, UNI2-h, `folds.csv`, notebook 12's predictions | four feature sets `data/features/uni2h-L1-224-t144-hsv-<method>-v1/` (per-slide, packed, manifest, predictions) | ~14 h |
+| `15_rope_mil` | Does self-attention with tile positions before ABMIL help? | the packed tissue set, `folds.csv`, notebook 12's predictions | predictions of the two transformer arms (not tracked) | ~3 h |
+| `16_capacity_control` | Is the RoPE model's gain just its size? | the same, notebook 15's predictions | predictions of a 4.2 M-parameter ABMIL (not tracked) | ~1 h |
+| `17_loss_test` | Cross-entropy, soft labels or CORN? | the same | predictions of both heads with each loss (not tracked) | ~4.5 h |
 
 **On Kaggle** the notebooks detect the environment themselves. Competition data
 is read from `/kaggle/input/prostate-cancer-grade-assessment/`, and outputs go
