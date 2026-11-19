@@ -948,6 +948,28 @@ Soft labels restore the middle grades the cross-site models under-predicted
 12.2%). The excess of grade 4 from Karolinska to Radboud remains (about 29%
 for ABMIL, 24% for the RoPE model, true 14.9%).
 
+### Stage 12: final models and the submission notebook (notebooks 18, 19)
+
+Measured 2026-11-19 on the desktop (RTX 4060).
+
+**Final models.** Both heads, soft labels, trained on all 10,615 packed slides
+once per seed (0 to 4); a head's five models are saved together and their
+probabilities averaged at prediction time (`fit_final`, `save_ensemble`,
+`predict_ensemble` in `src/mil.py`). ABMIL took 14.4 minutes (21.1 MB), the RoPE
+model 54.3 (84.1 MB). The averaged ensemble itself was not cross-validated; the
+cross-validation scores of notebook 17 are per-seed means.
+
+**The submission reproduces training.** `notebooks/19_submission.ipynb` runs
+`get_tiles`, `encode_tiles` and the ensemble live from the `.tiff`. On four
+training slides its grades and probabilities equal those from the stored
+features exactly, for both heads, so live inference computes what the models
+were trained on. Median 1.85 s per slide on the RTX 4060 with everything
+loaded. Tile grid positions for the RoPE model come from one function,
+`grid_positions`, used for training and inference alike.
+
+Kaggle (internet off) is still to be run: its GPU's time per slide, the hidden
+test set's size, and the runtime limit are not known.
+
 ## Open questions
 
 **Stage 2 — looking at the data**
