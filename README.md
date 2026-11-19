@@ -40,7 +40,7 @@ submitted. Rebuilding that half correctly is what this repository does.
 | Baseline from the packed set | `12_baseline`, `src/mil.py` | done — 0.864 mixed; cross-site 0.632 Radboud→Karolinska, 0.780 Karolinska→Radboud (5 seeds) |
 | Stain normalisation (handbook Stage 13 item) | `13_stain_normalisation`, `14_stain_ablation`, `src/stain.py`, `src/extract.py` | done — no method helps in both directions; the baseline goes forward |
 | Heads and losses | `15_rope_mil`, `16_capacity_control`, `17_loss_test` | done — RoPE model and ABMIL both go forward with soft labels (best: 0.887 / 0.750 / 0.794) |
-| 12. First submission | — | planned |
+| 12. First submission | `18_final_models`, `19_submission` | in progress — final models trained, submission notebook checked locally; Kaggle not yet run |
 
 The full plan, and the reasoning behind every stage, is in the
 [handbook](docs/01-preprocessing_and_feature_extraction_handbook.md).
@@ -100,6 +100,8 @@ exactly.
 | `15_rope_mil` | Does self-attention with tile positions before ABMIL help? | the packed tissue set, `folds.csv`, notebook 12's predictions | predictions of the two transformer arms (not tracked) | ~3 h |
 | `16_capacity_control` | Is the RoPE model's gain just its size? | the same, notebook 15's predictions | predictions of a 4.2 M-parameter ABMIL (not tracked) | ~1 h |
 | `17_loss_test` | Cross-entropy, soft labels or CORN? | the same | predictions of both heads with each loss (not tracked) | ~4.5 h |
+| `18_final_models` | What will the submission run? | the packed tissue set, `folds.csv` | `data/models/<head>_soft_labels.pt` (not tracked) | ~70 min |
+| `19_submission` | What does the pipeline score on unseen slides? | test slides (or 4 training slides without them), UNI2-h weights, a trained head | `submission.csv` (on Kaggle in `/kaggle/working`) | ~2 s per slide |
 
 **On Kaggle** the notebooks detect the environment themselves. Competition data
 is read from `/kaggle/input/prostate-cancer-grade-assessment/`, and outputs go
