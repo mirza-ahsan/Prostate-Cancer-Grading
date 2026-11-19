@@ -910,6 +910,44 @@ it does not meet the strict rule, which asks for a gain in both directions.
 Most of its -0.014 against the small baseline from Karolinska to Radboud comes
 with the size (the wide ABMIL loses 0.009 there too).
 
+### Loss: cross-entropy, soft labels, CORN (notebook 17)
+
+Measured 2026-11-18 to 19 on the desktop (RTX 4060),
+`notebooks/17_loss_test.ipynb`, packed tissue set `uni2h-L1-224-t144-hsv-v1`.
+Both heads (ABMIL, and the RoPE model of notebook 15) with each loss, everything
+else fixed. Soft labels and CORN as Abdul Haleem defined them in the FRSG repo:
+soft labels are cross-entropy against a Gaussian over the grades centred on the
+true one (sigma 1.0), predicted grade the argmax; CORN (Shi, Cao and Raschka
+2021) has five conditional binary tasks, predicted grade the count of
+cumulative probabilities above 0.5. `loss_value` and `decode` in `src/mil.py`
+match his formulas to within 1e-6.
+
+| Head | Loss | Mixed | Radboud to Karolinska | Karolinska to Radboud |
+|---|---|---|---|---|
+| ABMIL | cross-entropy | 0.864 | 0.632 | 0.780 |
+| ABMIL | soft labels | 0.886 | 0.696 | 0.789 |
+| ABMIL | CORN | 0.872 | 0.713 | 0.791 |
+| RoPE model | cross-entropy | 0.874 | 0.719 | 0.766 |
+| RoPE model | soft labels | **0.887** | **0.750** | **0.794** |
+| RoPE model | CORN | 0.876 | 0.733 | 0.777 |
+
+**Both ordinal losses beat cross-entropy for both heads in every direction**,
+each passing the decision rule against its head's cross-entropy run. Against
+cross-entropy: ABMIL soft labels +0.021 mixed, +0.065 and +0.009 cross-site;
+ABMIL CORN +0.007, +0.081, +0.010; RoPE soft labels +0.013, +0.031, +0.028;
+RoPE CORN +0.002 (not significant), +0.014, +0.011. This agrees with Abdul
+Haleem's ranking on EfficientNet patches (soft labels first).
+
+**The RoPE model with soft labels is the best combination**, highest in all
+three columns. Against ABMIL with soft labels: mixed +0.001 [-0.004, +0.006],
+Radboud to Karolinska +0.054 [+0.042, +0.066], Karolinska to Radboud +0.005
+[+0.000, +0.010]: it passes the decision rule.
+
+Soft labels restore the middle grades the cross-site models under-predicted
+(Radboud to Karolinska, ABMIL grade 2 from 5.5% to 13.5% of slides, true
+12.2%). The excess of grade 4 from Karolinska to Radboud remains (about 29%
+for ABMIL, 24% for the RoPE model, true 14.9%).
+
 ## Open questions
 
 **Stage 2 — looking at the data**
