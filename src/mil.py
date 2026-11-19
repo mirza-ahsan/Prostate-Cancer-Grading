@@ -41,8 +41,12 @@ Functions
    Abdul Haleem defined them in the FRSG repo. output_size, loss_value and
    decode give each loss's output width, its value for one slide, and the
    predicted grade.
+8. fit_final, save_ensemble, load_ensemble, predict_ensemble: the models a
+   submission uses, trained on every slide once per seed, saved together, and
+   averaged at prediction time; HEAD_BUILDERS names the heads.
 """
 
+import functools
 import os
 
 import numpy as np
@@ -108,13 +112,25 @@ def load_positions(packed, slide_ids=None):
     Rows follow the packed order, so tile k of a slide matches row k of its bag.
     """
     wanted = None if slide_ids is None else set(slide_ids)
-    cells = np.rint(packed.tiles[["x", "y"]].to_numpy() / GRID_CELL).astype(np.int64)
-    positions = {}
-    for slide_id, start, end in zip(packed.index["slide_id"], packed.starts, packed.ends):
-        if wanted is None or slide_id in wanted:
-            grid = cells[start:end]
-            positions[slide_id] = torch.from_numpy(grid - grid.min(axis=0))
-    return positions
+    xy = packed.tiles[["x", "y"]].to_numpy()
+    return {
+        slide_id: grid_positions(xy[start:end])
+        for slide_id, start, end in zip(packed.index["slide_id"], packed.starts, packed.ends)
+        if wanted is None or slide_id in wanted
+    }
+
+
+def grid_positions(coords):
+    """One slide's tile positions on the tiling grid, int64 [n, 2] (column, row), from level-0 (x, y) [n, 2].
+
+    The one copy of the rule, used for training (load_positions) and live
+    inference alike: divide by GRID_CELL, round, subtract the smallest column
+    and row.
+    """
+    cells = np.rint(np.asarray(coords, dtype=np.float64).reshape(-1, 2) / GRID_CELL).astype(np.int64)
+    if len(cells) == 0:
+        return torch.zeros((0, 2), dtype=torch.int64)
+    return torch.from_numpy(cells - cells.min(axis=0))
 
 
 def rope_2d(x, positions):
@@ -457,6 +473,74 @@ def compare_runs(first, second, protocol):
                      "second": after["mean"], "second seed std": after["std"],
                      "difference": after["mean"] - before["mean"], "95% low": low, "95% high": high})
     return rows
+
+
+HEAD_BUILDERS = {
+    "abmil": GatedABMIL,
+    "roformer": functools.partial(TileTransformerABMIL, rope=True),
+}
+HEAD_NEEDS_POSITIONS = {"abmil": False, "roformer": True}
+
+
+def fit_final(bags, labels, head, loss, seeds=SEEDS, positions=None, progress=None):
+    """Train one model per seed on every slide in labels; return their state dicts (on the CPU), in seed order.
+
+    head is a key of HEAD_BUILDERS; positions are needed for "roformer". These
+    are the models a submission uses: no slide is held out.
+    """
+    ids = labels.index.tolist()
+    grades = labels["isup_grade"].to_numpy()
+    states = []
+    for seed in progress(seeds, desc=f"{head} {loss}") if progress else seeds:
+        model = fit_abmil(bags, ids, grades, seed=seed, model_fn=HEAD_BUILDERS[head],
+                          positions=positions if HEAD_NEEDS_POSITIONS[head] else None, loss=loss)
+        states.append({k: v.detach().cpu() for k, v in model.state_dict().items()})
+    return states
+
+
+def save_ensemble(path, head, loss, seeds, states, info):
+    """Save a head's per-seed models in one file, atomically: head, loss, seeds, state dicts, and info.
+
+    info is a dictionary of plain values (feature-set version, commit, ...).
+    Everything is tensors, strings, numbers and lists, so it loads with
+    weights_only=True.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    record = {"head": head, "loss": loss, "seeds": list(seeds), "states": states, "info": info}
+    torch.save(record, path + ".part")
+    os.replace(path + ".part", path)
+
+
+def load_ensemble(path, device=DEVICE):
+    """Load a saved ensemble: (models in eval mode on device, the saved record without the weights)."""
+    record = torch.load(path, map_location="cpu", weights_only=True)
+    models = []
+    for state in record["states"]:
+        model = HEAD_BUILDERS[record["head"]](classes=output_size(record["loss"]))
+        model.load_state_dict(state)
+        models.append(model.to(device).eval())
+    return models, {k: v for k, v in record.items() if k != "states"}
+
+
+def predict_ensemble(models, loss, tiles, positions=None, device=DEVICE):
+    """One slide's grade from an ensemble, and its probabilities over the grades.
+
+    1. Each model's logits for the slide's tiles [n, FEATURE_DIM] (and positions
+       for the RoPE head).
+    2. Averaged over the models: the softmax probabilities (cross-entropy, soft
+       labels), or for CORN the cumulative probabilities P(grade > k).
+    3. The grade: the most probable one, or for CORN the number of averaged
+       cumulative probabilities above 0.5.
+    Returns (grade, probabilities as a numpy array).
+    """
+    with torch.inference_mode():
+        tiles = tiles.to(device).float()
+        outputs = [m(tiles) if positions is None else m(tiles, positions) for m in models]
+        if loss == "corn":
+            cumulative = torch.stack([torch.cumprod(torch.sigmoid(o), dim=0) for o in outputs]).mean(0)
+            return int((cumulative > 0.5).sum().item()), cumulative.cpu().numpy()
+        probabilities = torch.stack([torch.softmax(o, dim=0) for o in outputs]).mean(0)
+        return int(probabilities.argmax().item()), probabilities.cpu().numpy()
 
 
 def save_predictions(version, name, labels, predicted, features_dir=FEATURES_DIR):
