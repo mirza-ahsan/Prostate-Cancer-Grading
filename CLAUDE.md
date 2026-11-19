@@ -69,8 +69,15 @@ Pakistani cohort. Treat cross-site robustness as the real objective.
   mixed, 0.750 Radboud to Karolinska, 0.794 Karolinska to Radboud; ABMIL with
   soft labels 0.886, 0.696, 0.789. Decision (2026-11-19): both heads go
   forward, both with soft labels; no tuning yet.
-- Next in the handbook: Stage 12, a first real submission, with the tissue
-  pipeline (no stain step) and both heads trained with soft labels.
+- Stage 12 in progress: notebook 18 trained both heads with soft labels on all
+  10,615 slides, five seeds each, saved as `data/models/<head>_soft_labels.pt`
+  (not tracked); notebook 19 is the submission (live tiling, encoding and the
+  averaged five models; grade 0 for a slide with no tiles, an error or no time
+  left). Locally its predictions equal those from the stored features exactly.
+  Next: upload to Kaggle (private datasets for `src/`, the UNI2-h weights, the
+  heads and the offline wheels, staged in `~/kaggle-upload/`; Kaggle account
+  `aztrek`, CLI installed with `uv tool install kaggle --with six`) and submit,
+  one submission per head.
 - Settled code lives in `src/`. Notebooks 5 onward import from it. Notebooks 1
   to 4 are finished and keep their own path cells; leave them alone.
 - There is no notebook 08: Stage 8 was moving code into `src/`.
@@ -128,8 +135,10 @@ Two local machines. Check `nvidia-smi` first on either.
 ## The code in `src/`
 
 - `paths.py`: `ON_KAGGLE`, `DATA_DIR`, `DERIVED_DIR`, `FEATURES_DIR`,
-  `IMAGE_DIR`, `MASK_DIR`, `find_input`, `slide_path(slide_id)`,
-  `weights_path()`. `FEATURES_DIR` is `data/features/` locally and
+  `MODELS_DIR`, `IMAGE_DIR`, `MASK_DIR`, `find_input`, `slide_path(slide_id)`,
+  `weights_path()`, `head_path(name)`. On Kaggle `DATA_DIR` is the first of
+  `KAGGLE_DATA_DIRS` that exists, and `find_input` searches `/kaggle/input` at
+  any depth (Kaggle has nested competitions and datasets differently over time). `FEATURES_DIR` is `data/features/` locally and
   `/kaggle/working/features/` on Kaggle. Notebook 9, finished, still computes
   the same folder in its own cell.
 - `tiling.py`: `get_tiles(slide_path)` returns `(tiles, coords, tissue_frac)`:
@@ -169,7 +178,11 @@ Two local machines. Check `nvidia-smi` first on either.
   `load_positions` gives tile grid positions (level-0 coordinates / 896).
   Training functions take `model_fn`, `positions` and `loss` (`LOSSES`:
   cross_entropy, soft_labels with `SOFT_LABEL_SIGMA` 1.0, corn); defaults
-  reproduce the baseline exactly.
+  reproduce the baseline exactly. `grid_positions(coords)` is the one rule from
+  level-0 coordinates to grid positions, for training and inference.
+  `HEAD_BUILDERS`, `fit_final` (every slide, one model per seed),
+  `save_ensemble`, `load_ensemble` (weights only) and `predict_ensemble`
+  (averaged probabilities) are what the submission uses.
 - `stain.py`: `normalise_slide(method, tiles)` is the one stain step: fit the
   slide on its tiles' tissue pixels (our saturation and ink rule), map every
   tile to `TARGETS[method]`; returns the tiles and whether the fit ran.
