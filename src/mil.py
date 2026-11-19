@@ -34,6 +34,13 @@ Functions
    prediction tables.
 6. save_predictions: per-slide predictions with grade, hospital and fold, next
    to the feature set.
+7. LOSSES: the training loss is cross-entropy by default; "soft_labels"
+   (cross-entropy against a Gaussian over the grades centred on the true one,
+   SOFT_LABEL_SIGMA 1.0) and "corn" (conditional ordinal regression, Shi, Cao
+   and Raschka 2021: CLASSES - 1 outputs) are the ordinal alternatives, as
+   Abdul Haleem defined them in the FRSG repo. output_size, loss_value and
+   decode give each loss's output width, its value for one slide, and the
+   predicted grade.
 """
 
 import os
@@ -69,6 +76,8 @@ HOSPITALS = ("radboud", "karolinska")
 CROSS_SITE = {"radboud_to_karolinska": ("radboud", "karolinska"), "karolinska_to_radboud": ("karolinska", "radboud")}
 FOLD_PROTOCOLS = ("mixed", "radboud_to_karolinska_folds")
 BOOTSTRAP_DRAWS = 2000
+LOSSES = ("cross_entropy", "soft_labels", "corn")
+SOFT_LABEL_SIGMA = 1.0
 
 
 def load_bags(packed, slide_ids=None):
@@ -210,7 +219,49 @@ class GatedABMIL(nn.Module):
         return self.classify(weights @ h)
 
 
-def fit_abmil(bags, train_ids, grades, seed=SEED, epochs=EPOCHS, device=DEVICE, model_fn=GatedABMIL, positions=None):
+def output_size(loss):
+    """How many outputs the model needs for a loss: one per grade, or one per threshold for CORN."""
+    if loss not in LOSSES:
+        raise ValueError(f"unknown loss {loss!r}; expected one of {LOSSES}")
+    return CLASSES - 1 if loss == "corn" else CLASSES
+
+
+def loss_value(logits, grade, loss):
+    """The loss of one slide's logits against its grade (a 1-element tensor).
+
+    cross_entropy: the baseline's, unchanged.
+    soft_labels: cross-entropy against exp(-(k - grade)^2 / (2 sigma^2)) over the
+      grades k, normalised to sum to 1.
+    corn: for each threshold k, a binary cross-entropy of "grade > k", counted
+      only if the grade has passed the previous threshold (grade >= k); the mean
+      over the thresholds that count.
+    """
+    if loss == "cross_entropy":
+        return nn.functional.cross_entropy(logits[None], grade)
+    if loss == "soft_labels":
+        classes = torch.arange(CLASSES, device=logits.device, dtype=torch.float32)
+        soft = torch.exp(-((classes - grade.float()) ** 2) / (2 * SOFT_LABEL_SIGMA**2))
+        soft = soft / soft.sum()
+        return -(soft * torch.log_softmax(logits, dim=0)).sum()
+    if loss == "corn":
+        thresholds = torch.arange(CLASSES - 1, device=logits.device)
+        counted = (grade >= thresholds).float()
+        target = (grade > thresholds).float()
+        per_task = nn.functional.binary_cross_entropy_with_logits(logits, target, reduction="none")
+        return (per_task * counted).sum() / counted.sum()
+    raise ValueError(f"unknown loss {loss!r}; expected one of {LOSSES}")
+
+
+def decode(logits, loss):
+    """The predicted grade from one slide's logits: the argmax, or for CORN the number of
+    cumulative probabilities (products of the conditional ones) above 0.5."""
+    if loss == "corn":
+        return int((torch.cumprod(torch.sigmoid(logits), dim=0) > 0.5).sum().item())
+    return int(logits.argmax().item())
+
+
+def fit_abmil(bags, train_ids, grades, seed=SEED, epochs=EPOCHS, device=DEVICE, model_fn=GatedABMIL, positions=None,
+              loss="cross_entropy"):
     """Train a GatedABMIL on the given slides and return it.
 
     1. Seed PyTorch with seed (torch.manual_seed), and make a separate
@@ -224,11 +275,12 @@ def fit_abmil(bags, train_ids, grades, seed=SEED, epochs=EPOCHS, device=DEVICE, 
     grades follow the order of train_ids; they are copied into a new array
     first, because pandas may hand back a read-only one. model_fn builds the
     model (GatedABMIL by default); positions, if given, are passed to it with
-    each slide's tiles (TileTransformerABMIL with rope=True needs them).
+    each slide's tiles (TileTransformerABMIL with rope=True needs them). loss
+    is one of LOSSES; the model is built with output_size(loss) outputs.
     """
     torch.manual_seed(seed)
     order = torch.Generator().manual_seed(seed)
-    model = model_fn().to(device)
+    model = model_fn(classes=output_size(loss)).to(device)
     optimiser = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     schedule = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=epochs * len(train_ids))
     grades = torch.tensor(np.array(grades), device=device)
@@ -239,21 +291,21 @@ def fit_abmil(bags, train_ids, grades, seed=SEED, epochs=EPOCHS, device=DEVICE, 
             slide_id = train_ids[i]
             tiles = bags[slide_id].to(device).float()
             logits = model(tiles) if positions is None else model(tiles, positions[slide_id])
-            loss = nn.functional.cross_entropy(logits[None], grades[i:i + 1])
+            value = loss_value(logits, grades[i:i + 1], loss)
             optimiser.zero_grad()
-            loss.backward()
+            value.backward()
             optimiser.step()
             schedule.step()
     return model
 
 
-def predict_abmil(model, bags, ids, device=DEVICE, positions=None):
-    """The predicted grade (argmax of the logits) of each slide in ids, in eval mode, as a numpy array."""
+def predict_abmil(model, bags, ids, device=DEVICE, positions=None, loss="cross_entropy"):
+    """The predicted grade of each slide in ids (decode for the loss), in eval mode, as a numpy array."""
     model.eval()
     with torch.inference_mode():
         return np.array([
-            (model(bags[s].to(device).float()) if positions is None
-             else model(bags[s].to(device).float(), positions[s])).argmax().item()
+            decode(model(bags[s].to(device).float()) if positions is None
+                   else model(bags[s].to(device).float(), positions[s]), loss)
             for s in ids
         ])
 
@@ -275,20 +327,21 @@ def split(labels, fold, protocol):
     return labels.index[train].tolist(), labels.index[test].tolist()
 
 
-def cross_validate(bags, labels, protocol, seed=SEED, progress=None, model_fn=GatedABMIL, positions=None):
+def cross_validate(bags, labels, protocol, seed=SEED, progress=None, model_fn=GatedABMIL, positions=None,
+                   loss="cross_entropy"):
     """Train and predict on each of the five folds; the pooled test predictions, a Series by slide_id."""
     predictions = {}
     folds = sorted(labels["fold"].unique())
     for fold in progress(folds, desc=protocol) if progress else folds:
         train_ids, test_ids = split(labels, fold, protocol)
         model = fit_abmil(bags, train_ids, labels.loc[train_ids, "isup_grade"].to_numpy(), seed=seed,
-                          model_fn=model_fn, positions=positions)
-        predictions.update(zip(test_ids, predict_abmil(model, bags, test_ids, positions=positions)))
+                          model_fn=model_fn, positions=positions, loss=loss)
+        predictions.update(zip(test_ids, predict_abmil(model, bags, test_ids, positions=positions, loss=loss)))
     return pd.Series(predictions, name="predicted").sort_index()
 
 
 def cross_site(bags, labels, train_hospital, test_hospital, seeds=SEEDS, progress=None, model_fn=GatedABMIL,
-               positions=None):
+               positions=None, loss="cross_entropy"):
     """Train on every slide of one hospital, test on every slide of the other, once per seed.
 
     Returns a table indexed by the test slides (sorted), one column of
@@ -299,8 +352,8 @@ def cross_site(bags, labels, train_hospital, test_hospital, seeds=SEEDS, progres
     grades = labels.loc[train_ids, "isup_grade"].to_numpy()
     columns = {}
     for seed in progress(seeds, desc=f"{train_hospital} to {test_hospital}") if progress else seeds:
-        model = fit_abmil(bags, train_ids, grades, seed=seed, model_fn=model_fn, positions=positions)
-        columns[f"seed_{seed}"] = predict_abmil(model, bags, test_ids, positions=positions)
+        model = fit_abmil(bags, train_ids, grades, seed=seed, model_fn=model_fn, positions=positions, loss=loss)
+        columns[f"seed_{seed}"] = predict_abmil(model, bags, test_ids, positions=positions, loss=loss)
     return pd.DataFrame(columns, index=pd.Index(test_ids, name="slide_id"))
 
 
